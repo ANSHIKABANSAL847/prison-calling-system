@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, FormEvent, MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Loader2,
 } from "lucide-react";
+import { loginSchema, otpSchema, validateField } from "@/lib/validators";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -32,11 +33,14 @@ export default function LoginPage() {
   const [success, setSuccess] = useState("");
 
   const roles = ["Admin", "Jailer"];
-  const dropdownRef = useRef(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+    function handleClickOutside(e: globalThis.MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setRoleOpen(false);
       }
     }
@@ -45,13 +49,18 @@ export default function LoginPage() {
   }, []);
 
   // STEP 1: Submit credentials → backend sends OTP email
-  async function handleLogin(e) {
+  async function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!email || !password || !selectedRole) {
-      setError("Please fill all fields and select a role.");
+    const validationError = validateField(loginSchema, {
+      email,
+      password,
+      role: selectedRole,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -73,7 +82,7 @@ export default function LoginPage() {
 
       setSuccess("OTP sent to your email!");
       setStep(2);
-    } catch (err) {
+    } catch {
       setError("Server unreachable. Please try again.");
     } finally {
       setLoading(false);
@@ -81,13 +90,14 @@ export default function LoginPage() {
   }
 
   // STEP 2: Verify OTP → backend sets HTTP-only JWT cookies → redirect
-  async function handleVerifyOtp(e) {
+  async function handleVerifyOtp(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!otp) {
-      setError("Please enter the OTP.");
+    const validationError = validateField(otpSchema, { otp });
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -109,7 +119,7 @@ export default function LoginPage() {
 
       setSuccess("Login successful! Redirecting...");
       setTimeout(() => router.push("/dashboard"), 1000);
-    } catch (err) {
+    } catch {
       setError("Server unreachable. Please try again.");
     } finally {
       setLoading(false);
@@ -204,7 +214,11 @@ export default function LoginPage() {
                     onClick={() => setRoleOpen(!roleOpen)}
                     className={`w-full pl-4 pr-12 py-3 text-sm font-medium text-left bg-gray-50 border rounded-lg shadow-sm transition-all duration-200 appearance-none cursor-pointer hover:border-blue-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
                       selectedRole ? "text-gray-700" : "text-gray-400"
-                    } ${roleOpen ? "border-blue-500 ring-2 ring-blue-500/20 bg-white" : "border-gray-300"}`}
+                    } ${
+                      roleOpen
+                        ? "border-blue-500 ring-2 ring-blue-500/20 bg-white"
+                        : "border-gray-300"
+                    }`}
                   >
                     {selectedRole || "Select Role"}
                   </button>
