@@ -4,6 +4,7 @@ import { sendOtpEmail, sendJailerCredentialsEmail } from "../utils/mailer";
 import { setTokenCookies, verifyRefreshToken } from "../utils/tokens";
 import { authenticate, authorize } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { authLimiter } from "../config/rateLimiter";
 import {
   loginSchema,
   verifyOtpSchema,
@@ -46,7 +47,7 @@ function generateOtp(): string {
 // STEP 1:  POST /api/auth/login
 // Validates email + password + role, then sends OTP
 // ──────────────────────────────────────
-router.post("/login", validate(loginSchema), async (req: Request, res: Response): Promise<void> => {
+router.post("/login", authLimiter, validate(loginSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, role } = req.body as {
       email: string;
@@ -90,7 +91,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
 // STEP 2:  POST /api/auth/verify-otp
 // Verifies the OTP, then sets HTTP-only JWT cookies
 // ──────────────────────────────────────
-router.post("/verify-otp", validate(verifyOtpSchema), (req: Request, res: Response): void => {
+router.post("/verify-otp", authLimiter, validate(verifyOtpSchema), (req: Request, res: Response): void => {
   const { email, otp } = req.body as { email: string; otp: string };
 
   const record = otpStore.get(email);
