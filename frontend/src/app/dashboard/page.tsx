@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, LogOut, Loader2, UserPlus, Users, Contact, PhoneCall, ShieldAlert } from "lucide-react";
+import { Loader2, Users, Contact, PhoneCall, ShieldAlert } from "lucide-react";
+import Sidebar from "./Sidebar";
 import CreateJailerModal from "./CreateJailerModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateJailer, setShowCreateJailer] = useState(false);
+  const [activeNav, setActiveNav] = useState("dashboard");
 
   useEffect(() => {
     async function checkAuth() {
@@ -65,57 +67,26 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="w-6 h-6 text-blue-600" />
-            <h1 className="text-lg font-semibold text-gray-800">
-              CYBERSEC Dashboard
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user?.role === "Admin" && (
-              <button
-                onClick={() => setShowCreateJailer(true)}
-                className="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm text-white bg-gray-900 hover:bg-black rounded-lg transition font-medium shadow-sm"
-              >
-                <UserPlus className="w-4 h-4" />
-                Create Jailer
-              </button>
-            )}
-
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-700">
-                {user?.email}
-              </p>
-              <p className="text-xs text-blue-600 font-semibold">
-                {user?.role}
-              </p>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-100 flex">
+      {/* Sidebar */}
+      <Sidebar
+        userEmail={user?.email}
+        userRole={user?.role}
+        activeItem={activeNav}
+        onNavigate={setActiveNav}
+        onCreateJailer={() => setShowCreateJailer(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-8 py-10">
+      <main className="ml-64 flex-1 p-10">
         {/* Page Title */}
-        <h2 className="text-center text-gray-700 text-lg font-semibold mb-10">
+        <h2 className="text-gray-700 text-xl font-semibold mb-8">
           Operational Overview
         </h2>
 
         {/* Top Stat Cards */}
-        <div className="grid grid-cols-4 gap-8 mb-10">
+        <div className="grid grid-cols-4 gap-6 mb-10">
           <div className="bg-blue-600 text-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between">
               <p className="text-sm opacity-90">Prisoners</p>
@@ -150,7 +121,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Middle Section */}
-        <div className="grid grid-cols-2 gap-8 mb-10">
+        <div className="grid grid-cols-2 gap-6 mb-10">
           {/* Live Call Monitoring */}
           <div className="bg-white rounded-lg shadow-md border">
             <div className="bg-gray-100 px-4 py-3 font-medium text-sm border-b">
@@ -258,7 +229,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Section */}
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow-md border">
             <div className="bg-gray-100 px-4 py-3 font-medium text-sm border-b">
               Keyword Detection Trend

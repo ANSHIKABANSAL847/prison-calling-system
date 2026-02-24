@@ -1,0 +1,114 @@
+"use client";
+
+import {
+  Shield,
+  LogOut,
+  UserPlus,
+  LayoutDashboard,
+  Users,
+  Contact,
+  Mic,
+  PhoneCall,
+  ShieldAlert,
+  FileText,
+  BarChart3,
+} from "lucide-react";
+
+interface SidebarProps {
+  userEmail?: string;
+  userRole?: string;
+  activeItem: string;
+  onNavigate: (item: string) => void;
+  onCreateJailer: () => void;
+  onLogout: () => void;
+}
+
+const navItems = [
+  { key: "dashboard", label: "Main Dashboard", icon: LayoutDashboard },
+  { key: "prisoners", label: "Prisoner Management", icon: Users },
+  { key: "contacts", label: "Authorized Contacts", icon: Contact },
+  { key: "voice", label: "Voice Enrollment", icon: Mic },
+  { key: "calls", label: "Live Call Monitoring", icon: PhoneCall },
+  { key: "alerts", label: "Alerts & Incidents", icon: ShieldAlert },
+  { key: "logs", label: "Call Logs", icon: FileText },
+  { key: "analytics", label: "Analytics & Reports", icon: BarChart3 },
+];
+
+export default function Sidebar({
+  userEmail,
+  userRole,
+  activeItem,
+  onNavigate,
+  onCreateJailer,
+  onLogout,
+}: SidebarProps) {
+  return (
+    <aside className="fixed top-0 left-0 h-screen w-64 bg-white text-gray-900 flex flex-col border-r border-gray-200 z-40">
+      
+      {/* Brand */}
+      <div className="px-6 py-5 border-b border-gray-200 flex items-center gap-3">
+        <Shield className="w-7 h-7 text-gray-900" />
+        <span className="text-lg font-bold tracking-wide text-gray-900">
+          PICS
+        </span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeItem === item.key;
+
+          return (
+            <button
+              key={item.key}
+              onClick={() => onNavigate(item.key)}
+              className={`cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              }`}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom Section */}
+      <div className="border-t border-gray-200 px-4 py-4 space-y-3">
+        
+        {/* Create Jailer (Admin only) */}
+        {userRole === "Admin" && (
+          <button
+            onClick={onCreateJailer}
+            className="cursor-pointer w-full flex items-center gap-2 px-4 py-2 text-sm text-white bg-gray-900 hover:bg-black rounded-lg transition font-medium"
+          >
+            <UserPlus className="w-4 h-4" />
+            Create Jailer
+          </button>
+        )}
+
+        {/* User Info */}
+        <div className="px-2">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {userEmail}
+          </p>
+          <p className="text-xs text-gray-500 font-semibold">
+            {userRole}
+          </p>
+        </div>
+
+        {/* Logout */}
+        <button
+          onClick={onLogout}
+          className="cursor-pointer w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-gray-100 rounded-lg transition"
+        >
+          <LogOut className="w-4 h-4" />
+          Logout
+        </button>
+      </div>
+    </aside>
+  );
+}
