@@ -10,6 +10,7 @@ import {
   createJailerSendOtpSchema,
   createJailerVerifyOtpSchema,
 } from "../validators/auth.validators";
+import User from "../models/User";
 
 const router = Router();
 
@@ -54,14 +55,16 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
     };
 
     // --- Validate credentials per role ---
-    if (role === "Admin") {
-      if (email !== process.env.ADMIN_ID || password !== process.env.ADMIN_PASS) {
-        res.status(401).json({ message: "Invalid Admin credentials" });
-        return;
-      }
-    } else if (role === "Jailer") {
-      // TODO: Replace with real DB lookup
-      // For now, allow any non-empty credentials for Jailer demo
+    const user = await User.findOne({ email, role });
+
+    if (!user || !(await user.comparePassword(password))) {
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(403).json({ message: "Account is deactivated. Contact admin." });
+      return;
     }
 
     // --- Generate & send OTP ---
@@ -244,8 +247,23 @@ router.post(
       // Generate a random password for the jailer
       const generatedPassword = crypto.randomBytes(6).toString("base64url");
 
-      // TODO: Persist jailer to database with hashed password
-      console.log(`[JAILER CREATED] Name: ${jailerName}, Email: ${jailerEmail}, Pass: ${generatedPassword}`);
+      // Check if jailer email already exists
+      const existingUser = await User.findOne({ email: jailerEmail });
+      if (existingUser) {
+        res.status(409).json({ message: "A user with this email already exists" });
+        return;
+      }
+
+      // Persist jailer to database (password hashed by pre-save hook)
+      await User.create({
+        name: jailerName,
+        email: jailerEmail,
+        password: generatedPassword,
+        role: "Jailer",
+        isActive: true,
+      });
+
+      console.log(`[JAILER CREATED] Name: ${jailerName}, Email: ${jailerEmail}`);
 
       // Send login credentials to the jailer's email
       await sendJailerCredentialsEmail(jailerEmail, jailerName, generatedPassword);

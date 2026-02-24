@@ -41,7 +41,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
 export async function sendJailerCredentialsEmail(
   to: string,
   name: string,
-  password: string
+  password: string,
 ): Promise<void> {
   const mailOptions = {
     from: `"CYBERSEC Systems" <${process.env.SMTP_USER}>`,

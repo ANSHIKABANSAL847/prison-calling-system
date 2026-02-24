@@ -5,6 +5,8 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth";
+import { connectDB } from "./config/db";
+import { seedAdmin } from "./config/seed";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +29,17 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "PICS Backend is running" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Connect to DB → Seed admin → Start server
+async function bootstrap() {
+  await connectDB();
+  await seedAdmin();
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });

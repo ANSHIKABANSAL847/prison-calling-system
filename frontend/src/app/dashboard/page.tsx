@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, LogOut, Loader2, UserPlus } from "lucide-react";
+import { Shield, LogOut, Loader2, UserPlus, Users, Contact, PhoneCall, ShieldAlert } from "lucide-react";
 import CreateJailerModal from "./CreateJailerModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -80,7 +80,7 @@ export default function DashboardPage() {
             {user?.role === "Admin" && (
               <button
                 onClick={() => setShowCreateJailer(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-gray-900 hover:bg-black rounded-lg transition font-medium shadow-sm"
+                className="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm text-white bg-gray-900 hover:bg-black rounded-lg transition font-medium shadow-sm"
               >
                 <UserPlus className="w-4 h-4" />
                 Create Jailer
@@ -98,7 +98,7 @@ export default function DashboardPage() {
 
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+              className="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
             >
               <LogOut className="w-4 h-4" />
               Logout
@@ -117,22 +117,34 @@ export default function DashboardPage() {
         {/* Top Stat Cards */}
         <div className="grid grid-cols-4 gap-8 mb-10">
           <div className="bg-blue-600 text-white rounded-lg shadow-md p-6">
-            <p className="text-sm opacity-90">Prisoners</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm opacity-90">Prisoners</p>
+              <Users className="w-8 h-8 opacity-40" />
+            </div>
             <p className="text-3xl font-bold mt-2">1,254</p>
           </div>
 
           <div className="bg-green-600 text-white rounded-lg shadow-md p-6">
-            <p className="text-sm opacity-90">Contacts</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm opacity-90">Contacts</p>
+              <Contact className="w-8 h-8 opacity-40" />
+            </div>
             <p className="text-3xl font-bold mt-2">3,721</p>
           </div>
 
           <div className="bg-orange-500 text-white rounded-lg shadow-md p-6">
-            <p className="text-sm opacity-90">Active Calls</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm opacity-90">Active Calls</p>
+              <PhoneCall className="w-8 h-8 opacity-40" />
+            </div>
             <p className="text-3xl font-bold mt-2">15</p>
           </div>
 
           <div className="bg-red-500 text-white rounded-lg shadow-md p-6">
-            <p className="text-sm opacity-90">Alerts</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm opacity-90">Alerts</p>
+              <ShieldAlert className="w-8 h-8 opacity-40" />
+            </div>
             <p className="text-3xl font-bold mt-2">8</p>
           </div>
         </div>

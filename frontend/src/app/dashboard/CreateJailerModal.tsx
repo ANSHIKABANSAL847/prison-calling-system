@@ -153,14 +153,14 @@ export default function CreateJailerModal({
       {/* Modal */}
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in">
         {/* Header */}
-        <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gray-900 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white">
             <UserPlus className="w-5 h-5" />
             <h2 className="text-lg font-semibold">Create Jailer</h2>
           </div>
           <button
             onClick={handleClose}
-            className="text-white/80 hover:text-white transition"
+            className="cursor-pointer text-white/80 hover:text-white transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -187,7 +187,7 @@ export default function CreateJailerModal({
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                 step >= 1
-                  ? "bg-blue-600 text-white"
+                  ? "bg-gray-900 text-white"
                   : "bg-gray-200 text-gray-500"
               }`}
             >
@@ -195,13 +195,13 @@ export default function CreateJailerModal({
             </div>
             <div
               className={`w-12 h-0.5 ${
-                step >= 2 ? "bg-blue-600" : "bg-gray-200"
+                step >= 2 ? "bg-gray-900" : "bg-gray-200"
               }`}
             />
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                 step >= 2
-                  ? "bg-blue-600 text-white"
+                  ? "bg-gray-900 text-white"
                   : "bg-gray-200 text-gray-500"
               }`}
             >
@@ -224,7 +224,7 @@ export default function CreateJailerModal({
                     onChange={(e) => setJailerName(e.target.value)}
                     placeholder="Enter full name"
                     required
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-800"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition text-gray-800"
                   />
                 </div>
               </div>
@@ -241,7 +241,7 @@ export default function CreateJailerModal({
                     onChange={(e) => setJailerEmail(e.target.value)}
                     placeholder="jailer@gmail.com"
                     required
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-800"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition text-gray-800"
                   />
                 </div>
               </div>
@@ -253,7 +253,7 @@ export default function CreateJailerModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="cursor-pointer w-full py-2.5 bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -291,7 +291,7 @@ export default function CreateJailerModal({
                     placeholder="Enter 6-digit OTP"
                     required
                     maxLength={6}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm text-center tracking-[0.3em] font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-800"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm text-center tracking-[0.3em] font-mono font-bold focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition text-gray-800"
                   />
                 </div>
               </div>
@@ -310,7 +310,7 @@ export default function CreateJailerModal({
               <button
                 type="submit"
                 disabled={loading || otp.length !== 6}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="cursor-pointer w-full py-2.5 bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -329,7 +329,7 @@ export default function CreateJailerModal({
                   setOtp("");
                   setError("");
                 }}
-                className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition"
+                className="cursor-pointer w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition"
               >
                 ← Back
               </button>
