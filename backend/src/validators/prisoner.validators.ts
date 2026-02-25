@@ -70,3 +70,63 @@ export const createPrisonerSchema = Joi.object({
         "Invalid risk tag. Allowed: High Risk, Escape Risk, Violent Offender, Gang Affiliated, Good Conduct",
     }),
 });
+
+// ──────────────────────────────────────
+// Update Prisoner — all fields optional, at least 1 required
+// ──────────────────────────────────────
+export const updatePrisonerSchema = Joi.object({
+  fullName: Joi.string().trim().min(2).max(150).optional().messages({
+    "string.min": "Full name must be at least 2 characters",
+    "string.max": "Full name must not exceed 150 characters",
+  }),
+
+  dateOfBirth: Joi.date().max("now").optional().messages({
+    "date.max": "Date of birth cannot be in the future",
+  }),
+
+  gender: Joi.string().valid("Male", "Female", "Other").optional().messages({
+    "any.only": "Gender must be Male, Female, or Other",
+  }),
+
+  photo: Joi.string().uri().optional().messages({
+    "string.uri": "Photo must be a valid URL",
+  }),
+
+  aadhaarNumber: Joi.string()
+    .pattern(/^\d{12}$/)
+    .optional()
+    .allow("", null)
+    .messages({
+      "string.pattern.base": "Aadhaar number must be exactly 12 digits",
+    }),
+
+  caseNumber: Joi.string().trim().optional(),
+
+  prisonName: Joi.string().trim().optional(),
+
+  sentenceYears: Joi.number().min(0).optional().messages({
+    "number.min": "Sentence cannot be negative",
+  }),
+
+  riskTags: Joi.array()
+    .items(
+      Joi.string().valid(
+        "High Risk",
+        "Escape Risk",
+        "Violent Offender",
+        "Gang Affiliated",
+        "Good Conduct"
+      )
+    )
+    .optional()
+    .messages({
+      "any.only":
+        "Invalid risk tag. Allowed: High Risk, Escape Risk, Violent Offender, Gang Affiliated, Good Conduct",
+    }),
+
+  isActive: Joi.boolean().optional(),
+})
+  .min(1)
+  .messages({
+    "object.min": "At least one field is required to update",
+  });

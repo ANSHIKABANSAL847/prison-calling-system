@@ -2,79 +2,87 @@ import { Router } from "express";
 import { authenticate, authorize } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { writeLimiter, readLimiter } from "../config/rateLimiter";
-import { createPrisonerSchema, updatePrisonerSchema } from "../validators/prisoner.validators";
 import {
-  createPrisoner,
-  getAllPrisoners,
-  getPrisonerById,
-  updatePrisoner,
-  deletePrisoner,
-} from "../controllers/prisoner.controller";
+  createContactSchema,
+  updateContactSchema,
+} from "../validators/contact.validators";
+import {
+  getAllContacts,
+  getContacts,
+  createContact,
+  updateContact,
+  deleteContact,
+  toggleVerify,
+} from "../controllers/contact.controller";
 
 const router = Router();
 
 // ──────────────────────────────────────
-// GET /api/prisoners/list — List all prisoners (basic info)
-// Rate limited: 60 reads / 15 min
+// GET /api/contacts/all — List all contacts (overview)
 // ──────────────────────────────────────
 router.get(
-  "/list",
+  "/all",
   readLimiter,
   authenticate,
   authorize("Admin", "Jailer"),
-  getAllPrisoners
+  getAllContacts
 );
 
 // ──────────────────────────────────────
-// POST /api/prisoners/add-prisoner — Add a new prisoner
-// Only Admin and Jailer can add prisoners
-// Rate limited: 30 writes / 15 min
+// GET /api/contacts/:prisonerId — List all contacts for a prisoner
+// ──────────────────────────────────────
+router.get(
+  "/:prisonerId",
+  readLimiter,
+  authenticate,
+  authorize("Admin", "Jailer"),
+  getContacts
+);
+
+// ──────────────────────────────────────
+// POST /api/contacts/:prisonerId — Add a contact to a prisoner
 // ──────────────────────────────────────
 router.post(
-  "/add-prisoner",
+  "/:prisonerId",
   writeLimiter,
   authenticate,
   authorize("Admin", "Jailer"),
-  validate(createPrisonerSchema),
-  createPrisoner
+  validate(createContactSchema),
+  createContact
 );
 
 // ──────────────────────────────────────
-// PUT /api/prisoners/:id — Update a prisoner
-// Rate limited: 30 writes / 15 min
+// PUT /api/contacts/:contactId — Update a contact
 // ──────────────────────────────────────
 router.put(
-  "/:id",
+  "/:contactId",
   writeLimiter,
   authenticate,
   authorize("Admin", "Jailer"),
-  validate(updatePrisonerSchema),
-  updatePrisoner
+  validate(updateContactSchema),
+  updateContact
 );
 
 // ──────────────────────────────────────
-// DELETE /api/prisoners/:id — Delete a prisoner + cascade contacts
-// Only Admin can delete
-// Rate limited: 30 writes / 15 min
+// DELETE /api/contacts/:contactId — Delete a contact
 // ──────────────────────────────────────
 router.delete(
-  "/:id",
+  "/:contactId",
   writeLimiter,
   authenticate,
-  authorize("Admin"),
-  deletePrisoner
+  authorize("Admin", "Jailer"),
+  deleteContact
 );
 
 // ──────────────────────────────────────
-// GET /api/prisoners/:id — Get single prisoner details + contacts
-// Rate limited: 60 reads / 15 min
+// PATCH /api/contacts/:contactId/verify — Toggle verification status
 // ──────────────────────────────────────
-router.get(
-  "/:id",
-  readLimiter,
+router.patch(
+  "/:contactId/verify",
+  writeLimiter,
   authenticate,
   authorize("Admin", "Jailer"),
-  getPrisonerById
+  toggleVerify
 );
 
 export default router;

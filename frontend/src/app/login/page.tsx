@@ -181,6 +181,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    suppressHydrationWarning
                   />
                 </div>
 
@@ -193,11 +194,13 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    suppressHydrationWarning
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-3 text-gray-400"
+                    suppressHydrationWarning
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -219,6 +222,7 @@ export default function LoginPage() {
                         ? "border-blue-500 ring-2 ring-blue-500/20 bg-white"
                         : "border-gray-300"
                     }`}
+                    suppressHydrationWarning
                   >
                     {selectedRole || "Select Role"}
                   </button>
@@ -286,6 +290,7 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2.5 rounded-lg font-medium transition duration-200 flex items-center justify-center gap-2"
+              suppressHydrationWarning
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {step === 1 ? "Send OTP" : "Verify & Login"}

@@ -1,27 +1,29 @@
 "use client";
 
-const calls = [
-  { time: "10:45 AM", text: "Video Call with Anita Kumar" },
-  { time: "09:15 AM", text: "Phone Call to Rajesh Sharma" },
-  { time: "Yesterday 3:30 PM", text: 'SMS to Adv. Mehta: "Need to talk urgently"' },
-  { time: "Yesterday 11:00 AM", text: "Outgoing Call to Lawyer" },
-];
+import { PhoneIncoming } from "lucide-react";
 
-export default function CallHistory() {
+interface CallHistoryProps {
+  prisonerName: string;
+}
+
+export default function CallHistory({ prisonerName }: CallHistoryProps) {
+  // Call history data will come from a future API endpoint.
+  // For now, show an empty state since there's no call-log backend yet.
   return (
     <div className="bg-white rounded-xl shadow p-6 h-full">
-      <h3 className="text-lg font-semibold mb-4">Communication & Call History</h3>
+      <h3 className="text-lg font-semibold mb-4">
+        Communication & Call History
+      </h3>
 
-      <div className="space-y-4">
-        {calls.map((c, i) => (
-          <div key={i} className="flex gap-4 items-start">
-            <div className="w-2 h-2 mt-2 rounded-full bg-blue-500"></div>
-            <div>
-              <p className="text-sm font-medium">{c.time}</p>
-              <p className="text-sm text-gray-600">{c.text}</p>
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+        <PhoneIncoming className="w-10 h-10 mb-3" />
+        <p className="text-sm text-center">
+          No call history available for{" "}
+          <span className="font-medium text-gray-600">{prisonerName}</span>.
+        </p>
+        <p className="text-xs mt-1">
+          Call logs will appear here once monitored.
+        </p>
       </div>
     </div>
   );

@@ -2,123 +2,115 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Users, Contact, PhoneCall, ShieldAlert } from "lucide-react";
-import Sidebar from "./Sidebar";
-import CreateJailerModal from "./CreateJailerModal";
+import { Users, Contact, PhoneCall, ShieldAlert, Loader2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-interface User {
-  email: string;
-  role: string;
+interface DashboardStats {
+  prisoners: { total: number; active: number; inactive: number };
+  contacts: { total: number; verified: number; unverified: number };
+  activeCalls: number;
+  alerts: number;
 }
 
-interface Jailer {
-  name: string;
-  email: string;
-  role: string;
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  sub?: string;
+  icon: React.ReactNode;
+  color: string;
+  loading: boolean;
+}
+
+function StatCard({ label, value, sub, icon, color, loading }: StatCardProps) {
+  return (
+    <div className={`${color} text-white rounded-lg shadow-md p-6`}>
+      <div className="flex items-center justify-between">
+        <p className="text-sm opacity-90">{label}</p>
+        <div className="opacity-40">{icon}</div>
+      </div>
+      {loading ? (
+        <Loader2 className="w-7 h-7 animate-spin mt-2 opacity-70" />
+      ) : (
+        <>
+          <p className="text-3xl font-bold mt-2">
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </p>
+          {sub && <p className="text-xs opacity-75 mt-1">{sub}</p>}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showCreateJailer, setShowCreateJailer] = useState(false);
-  const [activeNav, setActiveNav] = useState("dashboard");
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
-    async function checkAuth() {
+    async function fetchStats() {
       try {
-        const res = await fetch(`${API_URL}/api/auth/me`, {
+        const res = await fetch(`${API_URL}/api/stats`, {
           credentials: "include",
         });
-
-        if (!res.ok) {
+        if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
-        const data = await res.json();
-        setUser(data.user);
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
       } catch {
-        router.replace("/login");
+        // silently fail — cards will show 0
       } finally {
-        setLoading(false);
+        setLoadingStats(false);
       }
     }
-
-    checkAuth();
-  }, [router]);
-
-  async function handleLogout() {
-    await fetch(`${API_URL}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
-    router.replace("/login");
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-      </div>
-    );
-  }
+    fetchStats();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
-      {/* Sidebar */}
-      <Sidebar
-        userEmail={user?.email}
-        userRole={user?.role}
-        activeItem={activeNav}
-        onNavigate={setActiveNav}
-        onCreateJailer={() => setShowCreateJailer(true)}
-        onLogout={handleLogout}
-      />
+    <>
+      {/* Page Title */}
+      <h2 className="text-gray-700 text-xl font-semibold mb-8">
+        Operational Overview
+      </h2>
 
-      {/* Main Content */}
-      <main className="ml-64 flex-1 p-10">
-        {/* Page Title */}
-        <h2 className="text-gray-700 text-xl font-semibold mb-8">
-          Operational Overview
-        </h2>
-
-        {/* Top Stat Cards */}
-        <div className="grid grid-cols-4 gap-6 mb-10">
-          <div className="bg-blue-600 text-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm opacity-90">Prisoners</p>
-              <Users className="w-8 h-8 opacity-40" />
-            </div>
-            <p className="text-3xl font-bold mt-2">1,254</p>
-          </div>
-
-          <div className="bg-green-600 text-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm opacity-90">Contacts</p>
-              <Contact className="w-8 h-8 opacity-40" />
-            </div>
-            <p className="text-3xl font-bold mt-2">3,721</p>
-          </div>
-
-          <div className="bg-orange-500 text-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm opacity-90">Active Calls</p>
-              <PhoneCall className="w-8 h-8 opacity-40" />
-            </div>
-            <p className="text-3xl font-bold mt-2">15</p>
-          </div>
-
-          <div className="bg-red-500 text-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm opacity-90">Alerts</p>
-              <ShieldAlert className="w-8 h-8 opacity-40" />
-            </div>
-            <p className="text-3xl font-bold mt-2">8</p>
-          </div>
-        </div>
+      {/* Top Stat Cards */}
+      <div className="grid grid-cols-4 gap-6 mb-10">
+        <StatCard
+          label="Prisoners"
+          value={stats?.prisoners.total ?? 0}
+          sub={`${stats?.prisoners.active ?? 0} active · ${stats?.prisoners.inactive ?? 0} inactive`}
+          icon={<Users className="w-8 h-8" />}
+          color="bg-blue-600"
+          loading={loadingStats}
+        />
+        <StatCard
+          label="Contacts"
+          value={stats?.contacts.total ?? 0}
+          sub={`${stats?.contacts.verified ?? 0} verified`}
+          icon={<Contact className="w-8 h-8" />}
+          color="bg-green-600"
+          loading={loadingStats}
+        />
+        <StatCard
+          label="Active Calls"
+          value={stats?.activeCalls ?? 0}
+          icon={<PhoneCall className="w-8 h-8" />}
+          color="bg-orange-500"
+          loading={loadingStats}
+        />
+        <StatCard
+          label="Alerts"
+          value={stats?.alerts ?? 0}
+          icon={<ShieldAlert className="w-8 h-8" />}
+          color="bg-red-500"
+          loading={loadingStats}
+        />
+      </div>
 
         {/* Middle Section */}
         <div className="grid grid-cols-2 gap-6 mb-10">
@@ -244,16 +236,6 @@ export default function DashboardPage() {
             <div className="p-10 text-center text-gray-400">Chart Area</div>
           </div>
         </div>
-      </main>
-
-      {/* Create Jailer Modal */}
-      <CreateJailerModal
-        isOpen={showCreateJailer}
-        onClose={() => setShowCreateJailer(false)}
-        onSuccess={(jailer: Jailer) => {
-          console.log("Jailer created:", jailer);
-        }}
-      />
-    </div>
+    </>
   );
 }

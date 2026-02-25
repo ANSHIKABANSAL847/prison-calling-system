@@ -21,6 +21,8 @@ export interface IContact extends Document {
   phoneNumber: string;
   photo?: string;
   isVerified: boolean;
+  voiceSamples: number;
+  verificationAccuracy: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +74,17 @@ const contactSchema = new Schema<IContact>(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    voiceSamples: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    verificationAccuracy: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
     },
   },
   {

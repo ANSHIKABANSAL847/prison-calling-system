@@ -9,6 +9,9 @@ import compression from "compression";
 import hpp from "hpp";
 import authRoutes from "./routes/auth";
 import prisonerRoutes from "./routes/prisoner";
+import contactRoutes from "./routes/contact";
+import statsRoutes from "./routes/stats";
+import uploadRoutes from "./routes/upload";
 import { connectDB } from "./config/db";
 import { seedAdmin } from "./config/seed";
 import { globalLimiter } from "./config/rateLimiter";
@@ -26,13 +29,16 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "10kb" }));   // Body limit to prevent large payloads
+app.use(express.json({ limit: "50kb" }));   // Body limit to prevent large payloads
 app.use(cookieParser());
 app.use(globalLimiter);                     // Global rate limit: 100 req / 15 min
 
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/prisoners", prisonerRoutes);
+app.use("/api/contacts", contactRoutes);
+app.use("/api/stats", statsRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

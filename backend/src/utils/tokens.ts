@@ -49,7 +49,7 @@ export function setTokenCookies(
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge: 50 * 60 * 1000, 
   });
 
   // Refresh token cookie — long-lived

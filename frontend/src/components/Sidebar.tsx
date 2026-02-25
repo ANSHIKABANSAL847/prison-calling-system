@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, usePathname } from "next/navigation";
 import {
   Shield,
   LogOut,
@@ -17,34 +18,38 @@ import {
 interface SidebarProps {
   userEmail?: string;
   userRole?: string;
-  activeItem: string;
-  onNavigate: (item: string) => void;
   onCreateJailer: () => void;
   onLogout: () => void;
 }
 
 const navItems = [
-  { key: "dashboard", label: "Main Dashboard", icon: LayoutDashboard },
-  { key: "prisoners", label: "Prisoner Management", icon: Users },
-  { key: "contacts", label: "Authorized Contacts", icon: Contact },
-  { key: "voice", label: "Voice Enrollment", icon: Mic },
-  { key: "calls", label: "Live Call Monitoring", icon: PhoneCall },
-  { key: "alerts", label: "Alerts & Incidents", icon: ShieldAlert },
-  { key: "logs", label: "Call Logs", icon: FileText },
-  { key: "analytics", label: "Analytics & Reports", icon: BarChart3 },
+  { key: "dashboard", label: "Main Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { key: "prisoners", label: "Prisoner Management", icon: Users, href: "/prisoner" },
+  { key: "contacts", label: "Authorized Contacts", icon: Contact, href: "/contacts" },
+  { key: "voice", label: "Voice Enrollment", icon: Mic, href: "" },
+  { key: "calls", label: "Live Call Monitoring", icon: PhoneCall, href: "" },
+  { key: "alerts", label: "Alerts & Incidents", icon: ShieldAlert, href: "" },
+  { key: "logs", label: "Call Logs", icon: FileText, href: "" },
+  { key: "analytics", label: "Analytics & Reports", icon: BarChart3, href: "" },
 ];
 
 export default function Sidebar({
   userEmail,
   userRole,
-  activeItem,
-  onNavigate,
   onCreateJailer,
   onLogout,
 }: SidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  function isActive(item: typeof navItems[number]): boolean {
+    if (item.key === "dashboard") return pathname === "/dashboard";
+    if (item.href) return pathname.startsWith(item.href);
+    return false;
+  }
+
   return (
     <aside className="fixed top-0 left-0 h-screen w-64 bg-white text-gray-900 flex flex-col border-r border-gray-200 z-40">
-      
       {/* Brand */}
       <div className="px-6 py-5 border-b border-gray-200 flex items-center gap-3">
         <Shield className="w-7 h-7 text-gray-900" />
@@ -57,14 +62,18 @@ export default function Sidebar({
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeItem === item.key;
+          const active = isActive(item);
 
           return (
             <button
               key={item.key}
-              onClick={() => onNavigate(item.key)}
+              onClick={() => {
+                if (item.href) {
+                  router.push(item.href);
+                }
+              }}
               className={`cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                isActive
+                active
                   ? "bg-gray-900 text-white shadow-sm"
                   : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
               }`}
@@ -78,7 +87,6 @@ export default function Sidebar({
 
       {/* Bottom Section */}
       <div className="border-t border-gray-200 px-4 py-4 space-y-3">
-        
         {/* Create Jailer (Admin only) */}
         {userRole === "Admin" && (
           <button
@@ -95,9 +103,7 @@ export default function Sidebar({
           <p className="text-sm font-medium text-gray-900 truncate">
             {userEmail}
           </p>
-          <p className="text-xs text-gray-500 font-semibold">
-            {userRole}
-          </p>
+          <p className="text-xs text-gray-500 font-semibold">{userRole}</p>
         </div>
 
         {/* Logout */}
