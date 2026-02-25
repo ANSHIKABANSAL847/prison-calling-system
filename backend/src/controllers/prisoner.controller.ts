@@ -8,11 +8,13 @@ import Contact from "../models/Contact";
 // ──────────────────────────────────────
 export async function getAllPrisoners(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const prisoners = await Prisoner.find()
-      .select("prisonerId fullName gender prisonName riskTags photo dateOfBirth isActive aadhaarNumber caseNumber sentenceYears")
+      .select(
+        "prisonerId fullName gender prisonName riskTags photo dateOfBirth isActive aadhaarNumber caseNumber sentenceYears",
+      )
       .sort({ createdAt: -1 })
       .lean({ virtuals: true });
 
@@ -31,7 +33,7 @@ export async function getAllPrisoners(
 // ──────────────────────────────────────
 export async function createPrisoner(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const {
@@ -50,7 +52,9 @@ export async function createPrisoner(
     // Check duplicate prisonerId
     const existingById = await Prisoner.findOne({ prisonerId });
     if (existingById) {
-      res.status(409).json({ message: `Prisoner ID ${prisonerId} already exists` });
+      res
+        .status(409)
+        .json({ message: `Prisoner ID ${prisonerId} already exists` });
       return;
     }
 
@@ -58,7 +62,11 @@ export async function createPrisoner(
     if (aadhaarNumber) {
       const existingByAadhaar = await Prisoner.findOne({ aadhaarNumber });
       if (existingByAadhaar) {
-        res.status(409).json({ message: "A prisoner with this Aadhaar number already exists" });
+        res
+          .status(409)
+          .json({
+            message: "A prisoner with this Aadhaar number already exists",
+          });
         return;
       }
     }
@@ -98,10 +106,12 @@ export async function createPrisoner(
 // ──────────────────────────────────────
 export async function getPrisonerById(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
-    const prisoner = await Prisoner.findById(req.params.id).lean({ virtuals: true });
+    const prisoner = await Prisoner.findById(req.params.id).lean({
+      virtuals: true,
+    });
 
     if (!prisoner) {
       res.status(404).json({ message: "Prisoner not found" });
@@ -125,7 +135,7 @@ export async function getPrisonerById(
 // ──────────────────────────────────────
 export async function updatePrisoner(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { id } = req.params;
@@ -159,7 +169,7 @@ export async function updatePrisoner(
     }
 
     const updated = await Prisoner.findByIdAndUpdate(id, req.body, {
-      returnDocument: 'after',
+      returnDocument: "after",
       runValidators: true,
     }).lean({ virtuals: true });
 
@@ -180,7 +190,7 @@ export async function updatePrisoner(
 // ──────────────────────────────────────
 export async function deletePrisoner(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { id } = req.params;

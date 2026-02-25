@@ -12,8 +12,10 @@ import prisonerRoutes from "./routes/prisoner";
 import contactRoutes from "./routes/contact";
 import statsRoutes from "./routes/stats";
 import uploadRoutes from "./routes/upload";
+import callLogRoutes from "./routes/callLog";
 import { connectDB } from "./config/db";
 import { seedAdmin } from "./config/seed";
+import { seedCallLogs } from "./config/seedCallLogs";
 import { globalLimiter } from "./config/rateLimiter";
 
 const app = express();
@@ -39,6 +41,7 @@ app.use("/api/prisoners", prisonerRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/call-logs", callLogRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
@@ -49,6 +52,7 @@ app.get("/api/health", (_req, res) => {
 async function bootstrap() {
   await connectDB();
   await seedAdmin();
+  await seedCallLogs();
 
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { loginSchema, otpSchema, validateField } from "@/lib/validators";
+import ForgotPasswordModal from "@/components/ForgotPasswordModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -314,9 +316,14 @@ export default function LoginPage() {
 
           {/* Forgot Password */}
           <div className="text-center mt-4">
-            <a href="#" className="text-blue-600 text-sm hover:underline">
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
+              className="text-blue-600 text-sm hover:underline cursor-pointer"
+              suppressHydrationWarning
+            >
               Forgot Password?
-            </a>
+            </button>
           </div>
 
           {/* Divider */}
@@ -330,6 +337,11 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+      />
     </div>
   );
 }
