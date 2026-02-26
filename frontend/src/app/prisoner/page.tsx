@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -9,8 +9,8 @@ import {
   ChevronDown,
   Download,
 } from "lucide-react";
-import AddPrisonerModal from "./components/AddPrisonerModal";
 import EditPrisonerModal from "./components/EditPrisonerModal";
+import Pagination from "@/components/Pagination";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -51,17 +51,27 @@ export default function PrisonerListPage() {
   const [error, setError] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
   const [editingPrisoner, setEditingPrisoner] = useState<Prisoner | null>(null);
   const [openMoreId, setOpenMoreId] = useState<string | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const moreRef = useRef<HTMLDivElement | null>(null);
 
-  async function fetchPrisoners() {
+  // Pagination state
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  const fetchPrisoners = useCallback(async (pg: number, search: string) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/prisoners/list`, {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      params.set("page", String(pg));
+      params.set("limit", String(PAGE_SIZE));
+
+      const res = await fetch(`${API_URL}/api/prisoners/list?${params}`, {
         credentials: "include",
       });
 
@@ -77,16 +87,18 @@ export default function PrisonerListPage() {
 
       const data = await res.json();
       setPrisoners(data.prisoners || []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
     } catch {
       setError("Network error. Could not fetch prisoners.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
   useEffect(() => {
-    fetchPrisoners();
-  }, []);
+    fetchPrisoners(page, activeSearch);
+  }, [fetchPrisoners, page, activeSearch]);
 
   async function handleDeactivate(id: string) {
     try {
@@ -99,7 +111,7 @@ export default function PrisonerListPage() {
       if (res.ok) {
         setDeactivatingId(null);
         setOpenMoreId(null);
-        fetchPrisoners();
+        fetchPrisoners(page, activeSearch);
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.message || "Failed to deactivate prisoner.");
@@ -118,7 +130,7 @@ export default function PrisonerListPage() {
       });
       if (res.ok) {
         setOpenMoreId(null);
-        fetchPrisoners();
+        fetchPrisoners(page, activeSearch);
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.message || "Failed to delete prisoner.");
@@ -139,16 +151,6 @@ export default function PrisonerListPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = prisoners.filter((p) => {
-    if (!activeSearch) return true;
-    const q = activeSearch.toLowerCase();
-    return (
-      p.fullName.toLowerCase().includes(q) ||
-      p.prisonerId.toString().includes(q) ||
-      p.prisonName.toLowerCase().includes(q)
-    );
-  });
-
   return (
     <div>
       {/* Top bar: Search left, buttons right */}
@@ -164,12 +166,12 @@ export default function PrisonerListPage() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") setActiveSearch(searchInput);
+                if (e.key === "Enter") { setPage(1); setActiveSearch(searchInput); }
               }}
               className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-52 bg-white"
             />
             <button
-              onClick={() => setActiveSearch(searchInput)}
+              onClick={() => { setPage(1); setActiveSearch(searchInput); }}
               className="cursor-pointer px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition font-medium"
             >
               Search
@@ -180,7 +182,7 @@ export default function PrisonerListPage() {
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => router.push("/prisoner/add-prisoner")}
             className="cursor-pointer flex items-center gap-1 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded font-medium transition"
           >
             Add Inmate
@@ -206,7 +208,7 @@ export default function PrisonerListPage() {
           <AlertCircle className="w-10 h-10 mb-3 text-red-400" />
           <p className="text-sm text-red-600">{error}</p>
           <button
-            onClick={fetchPrisoners}
+            onClick={() => fetchPrisoners(page, activeSearch)}
             className="mt-3 text-sm text-blue-600 hover:underline"
           >
             Retry
@@ -215,7 +217,7 @@ export default function PrisonerListPage() {
       )}
 
       {/* Empty State */}
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && !error && prisoners.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <Users className="w-12 h-12 mb-3" />
           <p className="text-sm">
@@ -227,7 +229,7 @@ export default function PrisonerListPage() {
       )}
 
       {/* Table */}
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && prisoners.length > 0 && (
         <div className="bg-white border rounded shadow-sm overflow-visible">
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 border-b text-gray-600 font-semibold">
@@ -242,7 +244,7 @@ export default function PrisonerListPage() {
               </tr>
             </thead>
             <tbody className="divide-y text-gray-700">
-              {filtered.map((p) => {
+              {prisoners.map((p) => {
                 const risk = getRiskLevel(p.riskTags);
                 const communication =
                   p.isActive === false ? "Restricted" : "Allowed";
@@ -363,22 +365,22 @@ export default function PrisonerListPage() {
               })}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={PAGE_SIZE}
+            onPageChange={(pg) => setPage(pg)}
+          />
         </div>
       )}
-
-      {/* Add Prisoner Modal */}
-      <AddPrisonerModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={fetchPrisoners}
-      />
 
       {/* Edit Prisoner Modal */}
       <EditPrisonerModal
         isOpen={!!editingPrisoner}
         prisoner={editingPrisoner}
         onClose={() => setEditingPrisoner(null)}
-        onSuccess={fetchPrisoners}
+        onSuccess={() => fetchPrisoners(page, activeSearch)}
       />
     </div>
   );

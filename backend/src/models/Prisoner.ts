@@ -17,6 +17,8 @@ export interface IPrisoner extends Document {
     | "Gang Affiliated"
     | "Good Conduct"
   )[];
+  voicePath?: string;       // Cloudinary URL of enrolled prisoner voice
+  voiceSamples: number;     // Number of voice samples enrolled
   verificationPercent: number;
   totalCallsMonitored: number;
   isActive: boolean;
@@ -98,6 +100,15 @@ const prisonerSchema = new Schema<IPrisoner>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    voicePath: {
+      type: String,
+      default: null,
+    },
+    voiceSamples: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

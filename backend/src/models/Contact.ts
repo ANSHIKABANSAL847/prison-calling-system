@@ -20,7 +20,7 @@ export interface IContact extends Document {
   isVerified: boolean;
 
   // Voice fields
-  voicePath?: string;           // Path to WAV file
+  voicePath?: string;           // Cloudinary URL of the enrolled voice recording
   voiceSamples: number;         // Number of samples
   verificationAccuracy: number; // % from ML
 
@@ -85,7 +85,8 @@ const contactSchema = new Schema<IContact>(
   { timestamps: true }
 );
 
-contactSchema.index({ prisoner: 1, phoneNumber: 1 }, { unique: true });
+// Phone number must be globally unique across all contacts
+contactSchema.index({ phoneNumber: 1 }, { unique: true });
 
 export default mongoose.models.Contact ||
   mongoose.model<IContact>("Contact", contactSchema);

@@ -104,9 +104,19 @@ export const forgotPasswordResetSchema = Joi.object({
       "any.required": "OTP is required",
       "string.empty": "OTP is required",
     }),
-  newPassword: Joi.string().min(8).required().messages({
-    "string.min": "Password must be at least 8 characters",
-    "any.required": "New password is required",
-    "string.empty": "New password is required",
-  }),
+  newPassword: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/[A-Z]/, "uppercase letter")
+    .pattern(/[a-z]/, "lowercase letter")
+    .pattern(/[0-9]/, "number")
+    .pattern(/[^A-Za-z0-9]/, "special character")
+    .required()
+    .messages({
+      "string.min": "Password must be at least 8 characters",
+      "string.max": "Password must not exceed 128 characters",
+      "string.pattern.name": "Password must include at least one {#name}",
+      "any.required": "New password is required",
+      "string.empty": "New password is required",
+    }),
 });

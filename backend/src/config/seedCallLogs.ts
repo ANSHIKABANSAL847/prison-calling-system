@@ -25,11 +25,6 @@ export async function seedCallLogs(): Promise<void> {
     return;
   }
 
-  const channels: Array<"Phone" | "Video Call" | "Chat"> = [
-    "Phone",
-    "Video Call",
-    "Chat",
-  ];
   const statuses: Array<"Verified" | "Failed" | "Pending"> = [
     "Verified",
     "Failed",
@@ -59,7 +54,6 @@ export async function seedCallLogs(): Promise<void> {
       (contact.prisoner as any)?._id
         ? contact.prisoner
         : pick(prisoners);
-    const channel = pick(channels);
     const verificationResult = pick(statuses);
     const similarityScore = randomScore(verificationResult);
     const date = new Date(now - Math.random() * SIXTY_DAYS);
@@ -71,7 +65,6 @@ export async function seedCallLogs(): Promise<void> {
       agent: agent._id,
       prisoner: (prisoner as any)._id ?? prisoner,
       contact: (contact as any)._id,
-      channel,
       date,
       durationSeconds,
       verificationResult,
