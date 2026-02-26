@@ -1,18 +1,99 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Contact from "../models/Contact";
+import Prisoner from "../models/Prisoner";
+import cloudinary from "../config/cloudinary";
 
+/** Upload buffer to Cloudinary and return the secure URL */
+async function uploadAudioToCloudinary(
+  buffer: Buffer,
+  publicId: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "pics/voices",
+        resource_type: "video", // Cloudinary uses "video" for all audio
+        public_id: publicId,
+      },
+      (error, result) => {
+        if (error || !result) return reject(error);
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+}
+
+/** Delete a previous Cloudinary voice asset (non-fatal) */
+async function deletePreviousVoice(url: string): Promise<void> {
+  try {
+    const parts = url.split("/");
+    const filenameWithExt = parts[parts.length - 1];
+    const folder = parts[parts.length - 2];
+    const publicId = `${folder}/${filenameWithExt.split(".")[0]}`;
+    await cloudinary.uploader.destroy(publicId, { resource_type: "video" });
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/voice/enroll
+// Accepts either { prisonerId } for prisoner enrollment
+//             or { contactId }  for contact enrollment
+// ──────────────────────────────────────────────────────────────────────────────
 export async function enrollVoice(req: Request, res: Response): Promise<void> {
   try {
-    const { contactId } = req.body;
+    const { contactId, prisonerId } = req.body;
 
-    if (!contactId || !mongoose.Types.ObjectId.isValid(contactId)) {
-      res.status(400).json({ message: "Invalid contactId" });
+    if (!contactId && !prisonerId) {
+      res.status(400).json({ message: "Provide either contactId or prisonerId" });
       return;
     }
 
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       res.status(400).json({ message: "No audio file uploaded" });
+      return;
+    }
+
+    // ── Prisoner voice enrollment ────────────────────────────────────────────
+    if (prisonerId) {
+      if (!mongoose.Types.ObjectId.isValid(prisonerId)) {
+        res.status(400).json({ message: "Invalid prisonerId" });
+        return;
+      }
+
+      const prisoner = await Prisoner.findById(prisonerId);
+      if (!prisoner) {
+        res.status(404).json({ message: "Prisoner not found" });
+        return;
+      }
+
+      if (prisoner.voicePath) {
+        await deletePreviousVoice(prisoner.voicePath);
+      }
+
+      const voiceUrl = await uploadAudioToCloudinary(
+        req.file.buffer,
+        `prisoner_${prisonerId}_${Date.now()}`
+      );
+
+      prisoner.voicePath = voiceUrl;
+      prisoner.voiceSamples = (prisoner.voiceSamples || 0) + 1;
+      await prisoner.save();
+
+      res.status(200).json({
+        message: "Prisoner voice enrolled successfully",
+        voicePath: voiceUrl,
+        prisonerId: prisoner._id,
+      });
+      return;
+    }
+
+    // ── Contact voice enrollment ─────────────────────────────────────────────
+    if (!mongoose.Types.ObjectId.isValid(contactId)) {
+      res.status(400).json({ message: "Invalid contactId" });
       return;
     }
 
@@ -22,17 +103,26 @@ export async function enrollVoice(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Save voice info
-    contact.voicePath = req.file.path;
+    if (contact.voicePath) {
+      await deletePreviousVoice(contact.voicePath);
+    }
+
+    const voiceUrl = await uploadAudioToCloudinary(
+      req.file.buffer,
+      `contact_${contactId}_${Date.now()}`
+    );
+
+    contact.voicePath = voiceUrl;
     contact.voiceSamples = (contact.voiceSamples || 0) + 1;
     contact.verificationAccuracy = 0;
-
+    contact.isVerified = true;
     await contact.save();
 
     res.status(200).json({
       message: "Voice enrolled successfully",
-      voicePath: req.file.path,
+      voicePath: voiceUrl,
       contactId: contact._id,
+      isVerified: true,
     });
   } catch (err) {
     console.error("Enroll voice error:", err);

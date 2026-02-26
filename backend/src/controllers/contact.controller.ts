@@ -3,21 +3,48 @@ import mongoose from "mongoose";
 import Contact from "../models/Contact";
 import Prisoner from "../models/Prisoner";
 
+// Relations where only ONE contact is allowed per prisoner
+const SINGLETON_RELATIONS = ["Father", "Mother", "Wife", "Husband"] as const;
+type SingletonRelation = typeof SINGLETON_RELATIONS[number];
+function isSingleton(relation: string): relation is SingletonRelation {
+  return SINGLETON_RELATIONS.includes(relation as SingletonRelation);
+}
+
 // ──────────────────────────────────────
-// GET /api/contacts/all — List all contacts across all prisoners
+// GET /api/contacts/all — List contacts with pagination + search
+// Query params: page (default 1), limit (default 10), search
 // ──────────────────────────────────────
 export async function getAllContacts(
-  _req: Request,
+  req: Request,
   res: Response
 ): Promise<void> {
   try {
-    const contacts = await Contact.find()
-      .populate("prisoner", "fullName prisonerId")
-      .select("contactName relation phoneNumber photo isVerified voiceSamples verificationAccuracy prisoner createdAt")
-      .sort({ createdAt: -1 })
-      .lean();
+    const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10));
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "10"), 10)));
+    const search = String(req.query.search ?? "").trim();
 
-    res.json({ count: contacts.length, contacts });
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      const rx = new RegExp(search, "i");
+      filter.$or = [
+        { contactName: rx },
+        { relation: rx },
+        { phoneNumber: rx },
+      ];
+    }
+
+    const [contacts, total] = await Promise.all([
+      Contact.find(filter)
+        .populate("prisoner", "fullName prisonerId")
+        .select("contactName relation phoneNumber photo isVerified voiceSamples verificationAccuracy prisoner createdAt")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Contact.countDocuments(filter),
+    ]);
+
+    res.json({ count: contacts.length, total, totalPages: Math.ceil(total / limit), page, contacts });
   } catch (err) {
     console.error("Get all contacts error:", err);
     res.status(500).json({ message: "Internal server error" });
@@ -77,16 +104,27 @@ export async function createContact(
 
     const { contactName, relation, phoneNumber, photo } = req.body;
 
-    // Check duplicate phone for this prisoner
-    const existing = await Contact.findOne({
-      prisoner: prisonerId,
-      phoneNumber,
-    }).lean();
+    // Check duplicate phone globally (a phone number can only belong to one contact)
+    const existing = await Contact.findOne({ phoneNumber }).lean();
     if (existing) {
       res.status(409).json({
-        message: "A contact with this phone number already exists for this prisoner",
+        message: "This phone number is already registered to another contact in the system.",
       });
       return;
+    }
+
+    // Enforce singleton relations (Father, Mother, Wife, Husband — only one each)
+    if (isSingleton(relation)) {
+      const singletonExists = await Contact.findOne({
+        prisoner: prisonerId,
+        relation,
+      }).lean();
+      if (singletonExists) {
+        res.status(409).json({
+          message: `This prisoner already has a ${relation} registered. Only one ${relation} is allowed per prisoner.`,
+        });
+        return;
+      }
     }
 
     // Limit max contacts per prisoner (security & scalability)
@@ -114,7 +152,7 @@ export async function createContact(
   } catch (err: any) {
     if (err.code === 11000) {
       res.status(409).json({
-        message: "Duplicate contact: phone number already registered for this prisoner",
+        message: "This phone number is already registered to another contact in the system.",
       });
       return;
     }
@@ -144,17 +182,32 @@ export async function updateContact(
       return;
     }
 
-    // If phone number is being changed, check for duplicates
+    // If phone number is being changed, check globally for duplicates
     if (req.body.phoneNumber && req.body.phoneNumber !== contact.phoneNumber) {
       const duplicate = await Contact.findOne({
-        prisoner: contact.prisoner,
         phoneNumber: req.body.phoneNumber,
         _id: { $ne: contactId },
       }).lean();
 
       if (duplicate) {
         res.status(409).json({
-          message: "Another contact with this phone number already exists for this prisoner",
+          message: "This phone number is already registered to another contact in the system.",
+        });
+        return;
+      }
+    }
+
+    // Enforce singleton relations on update
+    const incomingRelation = req.body.relation;
+    if (incomingRelation && isSingleton(incomingRelation) && incomingRelation !== contact.relation) {
+      const singletonExists = await Contact.findOne({
+        prisoner: contact.prisoner,
+        relation: incomingRelation,
+        _id: { $ne: contactId },
+      }).lean();
+      if (singletonExists) {
+        res.status(409).json({
+          message: `This prisoner already has a ${incomingRelation} registered. Only one ${incomingRelation} is allowed per prisoner.`,
         });
         return;
       }
@@ -168,7 +221,7 @@ export async function updateContact(
     res.json({ message: "Contact updated successfully", contact: updated });
   } catch (err: any) {
     if (err.code === 11000) {
-      res.status(409).json({ message: "Duplicate phone number for this prisoner" });
+      res.status(409).json({ message: "This phone number is already registered to another contact in the system." });
       return;
     }
     console.error("Update contact error:", err);

@@ -8,7 +8,6 @@ export interface ICallLog extends Document {
   agent: Types.ObjectId;         // ref User
   prisoner: Types.ObjectId;      // ref Prisoner
   contact: Types.ObjectId;       // ref Contact
-  channel: "Phone" | "Video Call" | "Chat";
   date: Date;
   durationSeconds: number;       // e.g. 755 → "12:35"
   verificationResult: "Verified" | "Failed" | "Pending";
@@ -22,6 +21,7 @@ export interface ICallLog extends Document {
 // ──────────────────────────────────────
 // Schema
 // ──────────────────────────────────────
+
 const callLogSchema = new Schema<ICallLog>(
   {
     sessionId: {
@@ -43,11 +43,6 @@ const callLogSchema = new Schema<ICallLog>(
     contact: {
       type: Schema.Types.ObjectId,
       ref: "Contact",
-      required: true,
-    },
-    channel: {
-      type: String,
-      enum: ["Phone", "Video Call", "Chat"],
       required: true,
     },
     date: {
@@ -89,6 +84,5 @@ callLogSchema.index({ prisoner: 1 });
 callLogSchema.index({ contact: 1 });
 callLogSchema.index({ verificationResult: 1 });
 callLogSchema.index({ date: -1 });
-callLogSchema.index({ channel: 1 });
 
 export default mongoose.model<ICallLog>("CallLog", callLogSchema);

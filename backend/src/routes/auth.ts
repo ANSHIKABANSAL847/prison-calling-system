@@ -4,7 +4,7 @@ import { sendOtpEmail, sendJailerCredentialsEmail, sendPasswordResetOtpEmail } f
 import { setTokenCookies, verifyRefreshToken } from "../utils/tokens";
 import { authenticate, authorize } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { authLimiter } from "../config/rateLimiter";
+import { authLimiter, globalLimiter } from "../config/rateLimiter";
 import {
   loginSchema,
   verifyOtpSchema,
@@ -40,6 +40,38 @@ const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 // In-memory store for Create-Jailer OTP
 // ──────────────────────────────────────
 const jailerOtpStore = new Map<string, JailerOtpRecord>();
+
+// ──────────────────────────────────────
+// OTP attempt tracker — per email brute-force protection
+// ──────────────────────────────────────
+interface AttemptRecord { count: number; lockedUntil: number; }
+const otpAttempts = new Map<string, AttemptRecord>();
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function consumeAttempt(key: string): { allowed: boolean; attemptsLeft: number } {
+  const now = Date.now();
+  const rec = otpAttempts.get(key) ?? { count: 0, lockedUntil: 0 };
+  if (rec.lockedUntil > now) return { allowed: false, attemptsLeft: 0 };
+  rec.count += 1;
+  if (rec.count >= MAX_OTP_ATTEMPTS) {
+    rec.lockedUntil = now + OTP_LOCKOUT_MS;
+    rec.count = 0;
+  }
+  otpAttempts.set(key, rec);
+  const attemptsLeft = MAX_OTP_ATTEMPTS - rec.count;
+  return { allowed: true, attemptsLeft };
+}
+
+function clearAttempts(key: string): void {
+  otpAttempts.delete(key);
+}
+
+/** Constant-time string comparison to prevent timing attacks */
+function timingSafeOtpMatch(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 function generateOtp(): string {
   return crypto.randomInt(100000, 999999).toString();
@@ -80,7 +112,9 @@ router.post("/login", authLimiter, validate(loginSchema), async (req: Request, r
 
     await sendOtpEmail(email, otp);
 
-    console.log(`[OTP] Sent to ${email}: ${otp}`); // dev helper — remove in prod
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[DEV][OTP] Sent to ${email}: ${otp}`);
+    }
 
     res.json({ message: "OTP sent to your email", otpSent: true });
   } catch (err) {
@@ -105,17 +139,25 @@ router.post("/verify-otp", authLimiter, validate(verifyOtpSchema), (req: Request
 
   if (Date.now() > record.expiresAt) {
     otpStore.delete(email);
+    clearAttempts(email);
     res.status(400).json({ message: "OTP has expired. Please request a new one." });
     return;
   }
 
-  if (record.otp !== otp) {
+  const attempt = consumeAttempt(email);
+  if (!attempt.allowed) {
+    res.status(429).json({ message: "Too many failed OTP attempts. Please request a new OTP after 15 minutes." });
+    return;
+  }
+
+  if (!timingSafeOtpMatch(record.otp, otp)) {
     res.status(401).json({ message: "Invalid OTP" });
     return;
   }
 
-  // OTP valid — clear it
+  // OTP valid — clear it and reset attempts
   otpStore.delete(email);
+  clearAttempts(email);
 
   // Issue JWT cookies
   const userPayload = { email, role: record.role };
@@ -131,7 +173,7 @@ router.post("/verify-otp", authLimiter, validate(verifyOtpSchema), (req: Request
 // POST /api/auth/refresh
 // Refresh token rotation — issues new access + refresh tokens
 // ──────────────────────────────────────
-router.post("/refresh", (req: Request, res: Response): void => {
+router.post("/refresh", authLimiter, (req: Request, res: Response): void => {
   const token = req.cookies.refreshToken as string | undefined;
 
   if (!token) {
@@ -159,7 +201,7 @@ router.post("/refresh", (req: Request, res: Response): void => {
 // POST /api/auth/logout
 // Clears both cookies
 // ──────────────────────────────────────
-router.post("/logout", (_req: Request, res: Response): void => {
+router.post("/logout", globalLimiter, (_req: Request, res: Response): void => {
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken", { path: "/api/auth/refresh" });
   res.json({ message: "Logged out" });
@@ -201,7 +243,9 @@ router.post(
 
       await sendOtpEmail(adminEmail, otp);
 
-      console.log(`[CREATE-JAILER OTP] Sent to admin ${adminEmail}: ${otp}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV][CREATE-JAILER OTP] Sent to admin ${adminEmail}: ${otp}`);
+      }
 
       res.json({ message: "OTP sent to your admin email for verification", otpSent: true });
     } catch (err) {
@@ -234,18 +278,26 @@ router.post(
 
       if (Date.now() > record.expiresAt) {
         jailerOtpStore.delete(adminEmail);
+        clearAttempts(`jailer:${adminEmail}`);
         res.status(400).json({ message: "OTP has expired. Please request a new one." });
         return;
       }
 
-      if (record.otp !== otp) {
+      const jailerAttempt = consumeAttempt(`jailer:${adminEmail}`);
+      if (!jailerAttempt.allowed) {
+        res.status(429).json({ message: "Too many failed OTP attempts. Please request a new OTP after 15 minutes." });
+        return;
+      }
+
+      if (!timingSafeOtpMatch(record.otp, otp)) {
         res.status(401).json({ message: "Invalid OTP" });
         return;
       }
 
-      // OTP valid — clear it
+      // OTP valid — clear it and reset attempts
       const { jailerName, jailerEmail } = record;
       jailerOtpStore.delete(adminEmail);
+      clearAttempts(`jailer:${adminEmail}`);
 
       // Generate a random password for the jailer
       const generatedPassword = crypto.randomBytes(6).toString("base64url");
@@ -266,7 +318,9 @@ router.post(
         isActive: true,
       });
 
-      console.log(`[JAILER CREATED] Name: ${jailerName}, Email: ${jailerEmail}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV][JAILER CREATED] Name: ${jailerName}, Email: ${jailerEmail}`);
+      }
 
       // Send login credentials to the jailer's email
       await sendJailerCredentialsEmail(jailerEmail, jailerName, generatedPassword);
@@ -319,7 +373,9 @@ router.post(
 
       await sendPasswordResetOtpEmail(email, otp);
 
-      console.log(`[FORGOT-PW OTP] Sent to ${email}: ${otp}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV][FORGOT-PW OTP] Sent to ${email}: ${otp}`);
+      }
 
       res.json({ message: "If that email is registered, an OTP has been sent.", otpSent: true });
     } catch (err) {
@@ -354,17 +410,25 @@ router.post(
 
       if (Date.now() > record.expiresAt) {
         forgotPasswordOtpStore.delete(email);
+        clearAttempts(`reset:${email}`);
         res.status(400).json({ message: "OTP has expired. Please request a new one." });
         return;
       }
 
-      if (record.otp !== otp) {
+      const resetAttempt = consumeAttempt(`reset:${email}`);
+      if (!resetAttempt.allowed) {
+        res.status(429).json({ message: "Too many failed OTP attempts. Please request a new OTP after 15 minutes." });
+        return;
+      }
+
+      if (!timingSafeOtpMatch(record.otp, otp)) {
         res.status(401).json({ message: "Invalid OTP. Please check and try again." });
         return;
       }
 
       // OTP valid — clear it and update password
       forgotPasswordOtpStore.delete(email);
+      clearAttempts(`reset:${email}`);
 
       const user = await User.findOne({ email });
       if (!user) {
@@ -375,7 +439,9 @@ router.post(
       user.password = newPassword; // hashed by pre-save hook
       await user.save();
 
-      console.log(`[FORGOT-PW] Password reset for ${email}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV][FORGOT-PW] Password reset for ${email}`);
+      }
 
       res.json({ message: "Password reset successful. You can now log in with your new password." });
     } catch (err) {

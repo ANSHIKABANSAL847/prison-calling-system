@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Users,
   Contact,
-  Mic,
   PhoneCall,
   ShieldAlert,
   FileText,
@@ -28,11 +27,10 @@ const navItems = [
   { key: "dashboard", label: "Main Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { key: "prisoners", label: "Prisoner Management", icon: Users, href: "/prisoner" },
   { key: "contacts", label: "Authorized Contacts", icon: Contact, href: "/contacts" },
-  { key: "voice", label: "Voice Enrollment", icon: Mic, href: "" },
-  { key: "calls", label: "Live Call Monitoring", icon: PhoneCall, href: "" },
+  { key: "calls", label: "Live Call Monitoring", icon: PhoneCall, href: "/live-monitor" },
   { key: "alerts", label: "Alerts & Incidents", icon: ShieldAlert, href: "" },
   { key: "logs", label: "Call Logs", icon: FileText, href: "/calllogs" },
-  { key: "analytics", label: "Analytics & Reports", icon: BarChart3, href: "" },
+  { key: "analytics", label: "Analytics & Reports", icon: BarChart3, href: "/analytics" },
 ];
 
 export default function Sidebar({

@@ -22,9 +22,8 @@ import {
   XCircle,
   Clock,
   Search,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
+import Pagination from "@/components/Pagination";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -41,7 +40,6 @@ interface CallLog {
   agent: PopulatedAgent;
   prisoner: PopulatedPrisoner;
   contact: PopulatedContact;
-  channel: "Phone" | "Video Call" | "Chat";
   date: string;
   duration: string;          // "mm:ss" formatted by server
   durationSeconds: number;
@@ -253,7 +251,6 @@ export default function CallLogsPage() {
   const [error, setError] = useState("");
 
   // Filters (staged + applied)
-  const [channelFilter, setChannelFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -266,7 +263,6 @@ export default function CallLogsPage() {
 
   // Applied filter state (only sent on Apply)
   const [applied, setApplied] = useState({
-    channel: "",
     status: "",
     dateFrom: "",
     dateTo: "",
@@ -284,7 +280,6 @@ export default function CallLogsPage() {
       setError("");
       try {
         const params = new URLSearchParams();
-        if (applied.channel) params.set("channel", applied.channel);
         if (applied.status) params.set("verificationResult", applied.status);
         if (applied.dateFrom) params.set("dateFrom", applied.dateFrom);
         if (applied.dateTo) params.set("dateTo", applied.dateTo);
@@ -324,7 +319,6 @@ export default function CallLogsPage() {
 
   function handleApplyFilters() {
     setApplied({
-      channel: channelFilter,
       status: statusFilter,
       dateFrom,
       dateTo,
@@ -335,13 +329,12 @@ export default function CallLogsPage() {
   }
 
   function handleClearFilters() {
-    setChannelFilter("");
     setStatusFilter("");
     setDateFrom("");
     setDateTo("");
     setSimilarityMin("");
     setSimilarityMax("");
-    setApplied({ channel: "", status: "", dateFrom: "", dateTo: "", similarityMin: "", similarityMax: "" });
+    setApplied({ status: "", dateFrom: "", dateTo: "", similarityMin: "", similarityMax: "" });
     setSearchInput("");
     setActiveSearch("");
     setPage(1);
@@ -365,7 +358,6 @@ export default function CallLogsPage() {
   }
 
   const hasActiveFilters =
-    applied.channel ||
     applied.status ||
     applied.dateFrom ||
     applied.dateTo ||
@@ -434,13 +426,6 @@ export default function CallLogsPage() {
                   setDateTo(now.toISOString().slice(0, 10));
                 }
               }}
-            />
-
-            <FilterSelect
-              label="Channel"
-              options={["Phone", "Video Call", "Chat"]}
-              value={channelFilter}
-              onChange={setChannelFilter}
             />
 
             <FilterSelect
@@ -544,7 +529,6 @@ export default function CallLogsPage() {
                     "Date & Time",
                     "Agent",
                     "Contact",
-                    "Channel",
                     "Session ID",
                     "Verification Result",
                     "Similarity",
@@ -562,14 +546,14 @@ export default function CallLogsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={7} className="py-16 text-center">
                       <Loader2 className="w-6 h-6 text-blue-500 animate-spin mx-auto" />
                       <p className="text-sm text-gray-500 mt-2">Loading records…</p>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-gray-400 text-sm">
+                    <td colSpan={7} className="py-16 text-center text-gray-400 text-sm">
                       No records found. Try adjusting your filters.
                     </td>
                   </tr>
@@ -592,19 +576,6 @@ export default function CallLogsPage() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                         {log.contact?.contactName ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            log.channel === "Phone"
-                              ? "bg-blue-100 text-blue-700"
-                              : log.channel === "Video Call"
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {log.channel}
-                        </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-gray-600 text-xs">
                         {log.sessionId}
@@ -649,43 +620,13 @@ export default function CallLogsPage() {
 
           {/* Pagination */}
           {!loading && totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-              <p className="text-sm text-gray-500">
-                Page {page} of {totalPages} &bull; {total} records
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-40 cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const pg = i + 1;
-                  return (
-                    <button
-                      key={pg}
-                      onClick={() => setPage(pg)}
-                      className={`w-8 h-8 rounded text-sm font-medium transition cursor-pointer ${
-                        pg === page
-                          ? "bg-blue-600 text-white"
-                          : "border border-gray-200 text-gray-600 hover:bg-white"
-                      }`}
-                    >
-                      {pg}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-40 cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={10}
+              onPageChange={setPage}
+            />
           )}
         </div>
 
@@ -712,7 +653,6 @@ export default function CallLogsPage() {
                   { label: "Agent", value: selected.agent?.name ?? "—" },
                   { label: "Contact", value: selected.contact?.contactName ?? "—" },
                   { label: "Prisoner", value: selected.prisoner?.fullName ?? "—" },
-                  { label: "Channel", value: selected.channel },
                   { label: "Date", value: formatDate(selected.date) },
                   { label: "Duration", value: selected.duration },
                 ].map(({ label, value }) => (

@@ -18,7 +18,6 @@ function getSampleLogs() {
     {
       _id: "sample1",
       sessionId: "SESSION-1001",
-      channel: "Video",
       verificationResult: "Verified",
       similarityScore: 92,
       durationSeconds: 420,
@@ -42,7 +41,6 @@ function getSampleLogs() {
     {
       _id: "sample2",
       sessionId: "SESSION-1002",
-      channel: "Voice",
       verificationResult: "Failed",
       similarityScore: 54,
       durationSeconds: 310,
@@ -66,7 +64,6 @@ function getSampleLogs() {
     {
       _id: "sample3",
       sessionId: "SESSION-1003",
-      channel: "Video",
       verificationResult: "Pending",
       similarityScore: 76,
       durationSeconds: 180,
@@ -96,7 +93,6 @@ function getSampleLogs() {
 export async function getCallLogs(req: Request, res: Response): Promise<void> {
   try {
     const {
-      channel,
       verificationResult,
       dateFrom,
       dateTo,
@@ -109,7 +105,6 @@ export async function getCallLogs(req: Request, res: Response): Promise<void> {
 
     const filter: Record<string, any> = {};
 
-    if (channel) filter.channel = channel;
     if (verificationResult) filter.verificationResult = verificationResult;
 
     if (dateFrom || dateTo) {

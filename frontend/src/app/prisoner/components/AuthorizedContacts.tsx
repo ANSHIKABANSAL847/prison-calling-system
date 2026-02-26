@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Phone,
   CheckCircle,
@@ -14,6 +14,7 @@ import {
 import type { ContactData } from "../[id]/page";
 import AddContactModal from "./AddContactModal";
 import { useRouter } from "next/navigation";
+import Pagination from "@/components/Pagination";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -33,6 +34,20 @@ export default function AuthorizedContacts({
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Client-side pagination
+  const CONTACTS_PAGE_SIZE = 5;
+  const [contactPage, setContactPage] = useState(1);
+  const totalContactPages = Math.ceil(contacts.length / CONTACTS_PAGE_SIZE);
+  const pagedContacts = contacts.slice(
+    (contactPage - 1) * CONTACTS_PAGE_SIZE,
+    contactPage * CONTACTS_PAGE_SIZE
+  );
+
+  // Reset to page 1 when contacts list changes (e.g. after add/delete)
+  useEffect(() => {
+    setContactPage(1);
+  }, [contacts.length]);
   async function handleDelete(contactId: string) {
     setDeletingId(contactId);
     try {
@@ -106,7 +121,7 @@ export default function AuthorizedContacts({
           </div>
         ) : (
           <div className="space-y-3">
-            {contacts.map((c) => (
+            {pagedContacts.map((c) => (
               <div
                 key={c._id}
                 className="flex justify-between items-center border rounded-lg p-3 hover:bg-gray-50 transition"
@@ -208,6 +223,19 @@ export default function AuthorizedContacts({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Contacts pagination */}
+        {totalContactPages > 1 && (
+          <div className="mt-3 border-t pt-3">
+            <Pagination
+              page={contactPage}
+              totalPages={totalContactPages}
+              total={contacts.length}
+              pageSize={CONTACTS_PAGE_SIZE}
+              onPageChange={setContactPage}
+            />
           </div>
         )}
       </div>

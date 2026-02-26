@@ -4,22 +4,47 @@ import Prisoner from "../models/Prisoner";
 import Contact from "../models/Contact";
 
 // ──────────────────────────────────────
-// GET /api/prisoners/list — List all prisoners (basic details)
+// GET /api/prisoners/list — List prisoners with pagination + search
+// Query params: page (default 1), limit (default 10), search
 // ──────────────────────────────────────
 export async function getAllPrisoners(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    const prisoners = await Prisoner.find()
-      .select(
-        "prisonerId fullName gender prisonName riskTags photo dateOfBirth isActive aadhaarNumber caseNumber sentenceYears",
-      )
-      .sort({ createdAt: -1 })
-      .lean({ virtuals: true });
+    const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10));
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "10"), 10)));
+    const search = String(req.query.search ?? "").trim();
+
+    // Build filter
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      const rx = new RegExp(search, "i");
+      const numericId = Number(search);
+      filter.$or = [
+        { fullName: rx },
+        { prisonName: rx },
+        ...(Number.isFinite(numericId) ? [{ prisonerId: numericId }] : []),
+      ];
+    }
+
+    const [prisoners, total] = await Promise.all([
+      Prisoner.find(filter)
+        .select(
+          "prisonerId fullName gender prisonName riskTags photo dateOfBirth isActive aadhaarNumber caseNumber sentenceYears",
+        )
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean({ virtuals: true }),
+      Prisoner.countDocuments(filter),
+    ]);
 
     res.json({
       count: prisoners.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page,
       prisoners,
     });
   } catch (err) {
