@@ -40,7 +40,7 @@ export default function VoiceRecorder({ onAudioReady }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = mediaRecorder;
 
       chunksRef.current = [];
@@ -70,8 +70,8 @@ export default function VoiceRecorder({ onAudioReady }: Props) {
           return;
         }
 
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], "voice.webm", { type: "audio/webm" });
+const blob = new Blob(chunksRef.current, { type: "audio/wav" });
+const file = new File([blob], "voice.wav", { type: "audio/wav" });
 
         const url = URL.createObjectURL(blob);
         setAudioURL(url);

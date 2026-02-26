@@ -3,7 +3,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { authenticate, authorize } from "../middleware/auth";
-import { enrollVoice } from "../controllers/voice.controller";
+import { enrollVoice, verifyVoice } from "../controllers/voice.controller";
 
 const router = Router();
 
@@ -30,13 +30,22 @@ const upload = multer({
   },
 });
 
-// FINAL ROUTE
+// ENROLL
 router.post(
   "/enroll",
   authenticate,
   authorize("Admin", "Jailer"),
   upload.single("audio"),
   enrollVoice
+);
+
+// VERIFY
+router.post(
+  "/verify",
+  authenticate,
+  authorize("Admin", "Jailer"),
+  upload.single("audio"),
+  verifyVoice
 );
 
 export default router;

@@ -1,6 +1,6 @@
 import os
 
-# 🔥 Disable symlinks on Windows (IMPORTANT)
+#  Disable symlinks on Windows (IMPORTANT)
 os.environ["SB_DISABLE_SYMLINKS"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
@@ -47,13 +47,13 @@ async def enroll(name: str = Form(...), file: UploadFile = File(...)):
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        print("✅ File saved:", temp_path)
+        print("File saved:", temp_path)
 
         signal = model.load_audio(temp_path)
-        print("✅ Audio loaded:", signal.shape)
+        print("Audio loaded:", signal.shape)
 
         embedding = model.encode_batch(signal).squeeze().detach().cpu().numpy()
-        print("✅ Embedding extracted")
+        print("Embedding extracted")
 
         voices_db[name] = embedding
         np.save(DB_PATH, voices_db)
@@ -61,7 +61,7 @@ async def enroll(name: str = Form(...), file: UploadFile = File(...)):
         return {"status": "success", "message": f"Voice enrolled for {name}"}
 
     except Exception as e:
-        print("❌ ML ENROLL ERROR:", e)
+        print(" ML ENROLL ERROR:", e)
         return {"status": "error", "message": str(e)}
 
     finally:
