@@ -73,3 +73,40 @@ export const createJailerVerifyOtpSchema = Joi.object({
       "string.empty": "OTP is required",
     }),
 });
+
+// ──────────────────────────────────────
+// POST /api/auth/forgot-password/send-otp
+// ──────────────────────────────────────
+export const forgotPasswordSendOtpSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    "string.email": "Please provide a valid email address",
+    "any.required": "Email is required",
+    "string.empty": "Email is required",
+  }),
+});
+
+// ──────────────────────────────────────
+// POST /api/auth/forgot-password/reset
+// ──────────────────────────────────────
+export const forgotPasswordResetSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    "string.email": "Please provide a valid email address",
+    "any.required": "Email is required",
+    "string.empty": "Email is required",
+  }),
+  otp: Joi.string()
+    .length(6)
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({
+      "string.length": "OTP must be exactly 6 digits",
+      "string.pattern.base": "OTP must contain only digits",
+      "any.required": "OTP is required",
+      "string.empty": "OTP is required",
+    }),
+  newPassword: Joi.string().min(8).required().messages({
+    "string.min": "Password must be at least 8 characters",
+    "any.required": "New password is required",
+    "string.empty": "New password is required",
+  }),
+});

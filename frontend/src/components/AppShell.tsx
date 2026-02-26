@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Sidebar from "./Sidebar";
 import CreateJailerModal from "@/app/dashboard/CreateJailerModal";
+import ForgotPasswordModal from "./ForgotPasswordModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -24,6 +25,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateJailer, setShowCreateJailer] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -72,6 +74,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         userRole={user?.role}
         onCreateJailer={() => setShowCreateJailer(true)}
         onLogout={handleLogout}
+        onChangePassword={() => setShowChangePassword(true)}
       />
 
       <main className="ml-64 flex-1 p-10">{children}</main>
@@ -82,6 +85,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onSuccess={(jailer: Jailer) => {
           console.log("Jailer created:", jailer);
         }}
+      />
+
+      <ForgotPasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+        prefillEmail={user?.email}
       />
     </div>
   );

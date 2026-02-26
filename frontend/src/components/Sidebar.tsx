@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   FileText,
   BarChart3,
+  KeyRound,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -20,6 +21,7 @@ interface SidebarProps {
   userRole?: string;
   onCreateJailer: () => void;
   onLogout: () => void;
+  onChangePassword: () => void;
 }
 
 const navItems = [
@@ -29,7 +31,7 @@ const navItems = [
   { key: "voice", label: "Voice Enrollment", icon: Mic, href: "" },
   { key: "calls", label: "Live Call Monitoring", icon: PhoneCall, href: "" },
   { key: "alerts", label: "Alerts & Incidents", icon: ShieldAlert, href: "" },
-  { key: "logs", label: "Call Logs", icon: FileText, href: "" },
+  { key: "logs", label: "Call Logs", icon: FileText, href: "/calllogs" },
   { key: "analytics", label: "Analytics & Reports", icon: BarChart3, href: "" },
 ];
 
@@ -38,6 +40,7 @@ export default function Sidebar({
   userRole,
   onCreateJailer,
   onLogout,
+  onChangePassword,
 }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -113,6 +116,15 @@ export default function Sidebar({
         >
           <LogOut className="w-4 h-4" />
           Logout
+        </button>
+
+        {/* Change Password */}
+        <button
+          onClick={onChangePassword}
+          className="cursor-pointer w-full flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition"
+        >
+          <KeyRound className="w-4 h-4" />
+          Change Password
         </button>
       </div>
     </aside>

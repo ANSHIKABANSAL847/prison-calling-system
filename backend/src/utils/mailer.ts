@@ -68,3 +68,31 @@ export async function sendJailerCredentialsEmail(
 
   await transporter.sendMail(mailOptions);
 }
+
+/**
+ * Send password-reset OTP email
+ */
+export async function sendPasswordResetOtpEmail(
+  to: string,
+  otp: string,
+): Promise<void> {
+  const mailOptions = {
+    from: `"CYBERSEC Systems" <${process.env.SMTP_USER}>`,
+    to,
+    subject: "Password Reset OTP – PICS",
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: auto; padding: 32px; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <h2 style="color: #1d4ed8; text-align: center;">CYBERSEC SYSTEMS</h2>
+        <p style="text-align: center; color: #374151;">You requested a <strong>password reset</strong>. Use the OTP below:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #dc2626; background: #fef2f2; padding: 12px 24px; border-radius: 8px;">${otp}</span>
+        </div>
+        <p style="text-align: center; color: #6b7280; font-size: 13px;">This code expires in <strong>5 minutes</strong>. Do not share it with anyone.</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+        <p style="text-align: center; color: #9ca3af; font-size: 11px;">If you did not request a password reset, please ignore this email and ensure your account is safe.</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+}

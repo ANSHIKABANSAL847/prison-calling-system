@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
-import { sendOtpEmail, sendJailerCredentialsEmail } from "../utils/mailer";
+import { sendOtpEmail, sendJailerCredentialsEmail, sendPasswordResetOtpEmail } from "../utils/mailer";
 import { setTokenCookies, verifyRefreshToken } from "../utils/tokens";
 import { authenticate, authorize } from "../middleware/auth";
 import { validate } from "../middleware/validate";
@@ -10,6 +10,8 @@ import {
   verifyOtpSchema,
   createJailerSendOtpSchema,
   createJailerVerifyOtpSchema,
+  forgotPasswordSendOtpSchema,
+  forgotPasswordResetSchema,
 } from "../validators/auth.validators";
 import User from "../models/User";
 
@@ -276,6 +278,109 @@ router.post(
     } catch (err) {
       console.error("Create jailer verify error:", err);
       res.status(500).json({ message: "Jailer created but failed to send credentials email." });
+    }
+  }
+);
+
+// ──────────────────────────────────────
+// In-memory store for Forgot-Password OTP
+// ──────────────────────────────────────
+interface ForgotPasswordOtpRecord {
+  otp: string;
+  expiresAt: number;
+}
+
+const forgotPasswordOtpStore = new Map<string, ForgotPasswordOtpRecord>();
+
+// ──────────────────────────────────────
+// POST /api/auth/forgot-password/send-otp
+// Public: validates email exists, sends OTP
+// ──────────────────────────────────────
+router.post(
+  "/forgot-password/send-otp",
+  authLimiter,
+  validate(forgotPasswordSendOtpSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email } = req.body as { email: string };
+
+      const user = await User.findOne({ email });
+      if (!user) {
+        // Return 200 to avoid user enumeration
+        res.json({ message: "If that email is registered, an OTP has been sent.", otpSent: true });
+        return;
+      }
+
+      const otp = generateOtp();
+      forgotPasswordOtpStore.set(email, {
+        otp,
+        expiresAt: Date.now() + OTP_EXPIRY_MS,
+      });
+
+      await sendPasswordResetOtpEmail(email, otp);
+
+      console.log(`[FORGOT-PW OTP] Sent to ${email}: ${otp}`);
+
+      res.json({ message: "If that email is registered, an OTP has been sent.", otpSent: true });
+    } catch (err) {
+      console.error("Forgot password send-otp error:", err);
+      res.status(500).json({ message: "Failed to send OTP. Please try again later." });
+    }
+  }
+);
+
+// ──────────────────────────────────────
+// POST /api/auth/forgot-password/reset
+// Public: verifies OTP and sets new password
+// ──────────────────────────────────────
+router.post(
+  "/forgot-password/reset",
+  authLimiter,
+  validate(forgotPasswordResetSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email, otp, newPassword } = req.body as {
+        email: string;
+        otp: string;
+        newPassword: string;
+      };
+
+      const record = forgotPasswordOtpStore.get(email);
+
+      if (!record) {
+        res.status(400).json({ message: "No OTP requested for this email. Please start again." });
+        return;
+      }
+
+      if (Date.now() > record.expiresAt) {
+        forgotPasswordOtpStore.delete(email);
+        res.status(400).json({ message: "OTP has expired. Please request a new one." });
+        return;
+      }
+
+      if (record.otp !== otp) {
+        res.status(401).json({ message: "Invalid OTP. Please check and try again." });
+        return;
+      }
+
+      // OTP valid — clear it and update password
+      forgotPasswordOtpStore.delete(email);
+
+      const user = await User.findOne({ email });
+      if (!user) {
+        res.status(404).json({ message: "User not found." });
+        return;
+      }
+
+      user.password = newPassword; // hashed by pre-save hook
+      await user.save();
+
+      console.log(`[FORGOT-PW] Password reset for ${email}`);
+
+      res.json({ message: "Password reset successful. You can now log in with your new password." });
+    } catch (err) {
+      console.error("Forgot password reset error:", err);
+      res.status(500).json({ message: "Failed to reset password. Please try again." });
     }
   }
 );
