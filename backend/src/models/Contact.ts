@@ -1,8 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-// ──────────────────────────────────────
-// Interface
-// ──────────────────────────────────────
 export interface IContact extends Document {
   prisoner: Types.ObjectId;
   contactName: string;
@@ -21,25 +18,26 @@ export interface IContact extends Document {
   phoneNumber: string;
   photo?: string;
   isVerified: boolean;
-  voiceSamples: number;
-  verificationAccuracy: number;
+
+  // Voice fields
+  voicePath?: string;           // Path to WAV file
+  voiceSamples: number;         // Number of samples
+  verificationAccuracy: number; // % from ML
+
   createdAt: Date;
   updatedAt: Date;
 }
 
-// ──────────────────────────────────────
-// Schema
-// ──────────────────────────────────────
 const contactSchema = new Schema<IContact>(
   {
     prisoner: {
       type: Schema.Types.ObjectId,
       ref: "Prisoner",
-      required: [true, "Prisoner reference is required"],
+      required: true,
     },
     contactName: {
       type: String,
-      required: [true, "Contact name is required"],
+      required: true,
       trim: true,
       minlength: 2,
       maxlength: 150,
@@ -47,23 +45,14 @@ const contactSchema = new Schema<IContact>(
     relation: {
       type: String,
       enum: [
-        "Wife",
-        "Husband",
-        "Father",
-        "Mother",
-        "Brother",
-        "Sister",
-        "Son",
-        "Daughter",
-        "Lawyer",
-        "Friend",
-        "Other",
+        "Wife","Husband","Father","Mother","Brother","Sister",
+        "Son","Daughter","Lawyer","Friend","Other",
       ],
-      required: [true, "Relation is required"],
+      required: true,
     },
     phoneNumber: {
       type: String,
-      required: [true, "Phone number is required"],
+      required: true,
       trim: true,
       match: [/^\+?\d{10,15}$/, "Enter a valid phone number"],
     },
@@ -74,6 +63,12 @@ const contactSchema = new Schema<IContact>(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+
+    // Voice
+    voicePath: {
+      type: String,
+      default: null,
     },
     voiceSamples: {
       type: Number,
@@ -87,23 +82,10 @@ const contactSchema = new Schema<IContact>(
       max: 100,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// ──────────────────────────────────────
-// Indexes
-// ──────────────────────────────────────
-contactSchema.index({ prisoner: 1 });
-contactSchema.index({ phoneNumber: 1 });
 contactSchema.index({ prisoner: 1, phoneNumber: 1 }, { unique: true });
 
-// ──────────────────────────────────────
-// Model
-// ──────────────────────────────────────
-const Contact =
-  mongoose.models.Contact ||
+export default mongoose.models.Contact ||
   mongoose.model<IContact>("Contact", contactSchema);
-
-export default Contact;

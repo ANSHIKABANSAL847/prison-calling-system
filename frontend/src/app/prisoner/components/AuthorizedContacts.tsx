@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ContactData } from "../[id]/page";
 import AddContactModal from "./AddContactModal";
+import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -31,7 +32,7 @@ export default function AuthorizedContacts({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
+  const router = useRouter();
   async function handleDelete(contactId: string) {
     setDeletingId(contactId);
     try {
@@ -83,7 +84,7 @@ export default function AuthorizedContacts({
             </span>
           </h3>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => router.push(`/contacts/add-contact?prisonerId=${prisonerId}`)}
             className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition"
           >
             <UserPlus className="w-3.5 h-3.5" />
