@@ -17,6 +17,7 @@ import { connectDB } from "./config/db";
 import { seedAdmin } from "./config/seed";
 import { seedCallLogs } from "./config/seedCallLogs";
 import { globalLimiter } from "./config/rateLimiter";
+import voiceRoutes from "./routes/voice";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,6 +43,9 @@ app.use("/api/contacts", contactRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/call-logs", callLogRoutes);
+app.use("/api/voice", voiceRoutes); 
+app.use("/uploads", express.static("uploads"));
+
 
 // Health check
 app.get("/api/health", (_req, res) => {
