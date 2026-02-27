@@ -1,21 +1,36 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Mic, Upload, Square, Trash2, Play, Pause, RotateCcw } from "lucide-react";
+import { Mic, Upload, Square, Trash2, Play, Pause, RotateCcw, Volume2, VolumeX, Sparkles, Mic2 } from "lucide-react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+interface AudioQuality {
+  snrDb: number | null;
+  clarityScore: number | null;
+  speakerCount: number | null;
+  noiseLabel: string;
+  clarityLabel: string;
+}
 
 interface Props {
   onAudioReady: (file: File | null) => void;
+  /** When true, shows a "Save Sample" button instead of auto-calling onAudioReady.
+   *  Use in flows where onAudioReady unmounts the recorder (add-contact, edit-contact). */
+  manualSave?: boolean;
 }
 
 const MIN_SECONDS = 3;
 const MAX_SECONDS = 10;
 
-export default function VoiceRecorder({ onAudioReady }: Props) {
+export default function VoiceRecorder({ onAudioReady, manualSave = false }: Props) {
   const [recording, setRecording] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [error, setError] = useState<string>("");
+  const [audioQuality, setAudioQuality] = useState<AudioQuality | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -39,6 +54,33 @@ export default function VoiceRecorder({ onAudioReady }: Props) {
 
   // Bypass audioFile guard when triggered from reRecord
   const reRecordPendingRef = useRef(false);
+
+  // Send audio file to backend /analyze and update quality state
+  async function analyzeAudio(file: File) {
+    setAnalyzing(true);
+    setAudioQuality(null);
+    try {
+      const form = new FormData();
+      form.append("audio", file);
+      const res = await fetch(`${API_URL}/api/voice/analyze`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAudioQuality(data);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || `Server error ${res.status}`);
+      }
+    } catch (err) {
+      // Show a visible error so the user knows analysis failed
+      setError(err instanceof Error ? `Quality check failed: ${err.message}` : "Quality check failed");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   // ── Waveform helpers ────────────────────────────────────────────────────
   function startWaveform(stream: MediaStream) {
@@ -199,6 +241,7 @@ export default function VoiceRecorder({ onAudioReady }: Props) {
     setAudioURL(null);
     setAudioFile(null);
     setError("");
+    setAudioQuality(null);
     onAudioReady(null);
   }
 
@@ -259,7 +302,9 @@ const file = new File([blob], "voice.wav", { type: "audio/wav" });
         const url = URL.createObjectURL(blob);
         setAudioURL(url);
         setAudioFile(file);
-        onAudioReady(file);
+        // Don't call onAudioReady yet — wait for user to confirm after seeing quality
+        analyzeAudio(file);
+        if (!manualSave) onAudioReady(file);
       };
 
       mediaRecorder.start();
@@ -318,7 +363,9 @@ const file = new File([blob], "voice.wav", { type: "audio/wav" });
 
       setAudioURL(url);
       setAudioFile(file);
-      onAudioReady(file);
+      // Don't call onAudioReady yet — wait for user to confirm after seeing quality
+      analyzeAudio(file);
+      if (!manualSave) onAudioReady(file);
     };
   }
 
@@ -458,6 +505,94 @@ const file = new File([blob], "voice.wav", { type: "audio/wav" });
       {/* Errors */}
       {error && (
         <p className="text-sm text-red-600 text-center font-medium">{error}</p>
+      )}
+
+      {/* Audio Quality Panel */}
+      {(analyzing || audioQuality) && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Audio Quality</p>
+
+          {analyzing ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-3 h-3 rounded-full bg-indigo-400 animate-pulse inline-block" />
+                Analysing audio…
+              </div>
+              {manualSave && (
+                <button type="button" disabled
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 text-sm font-semibold rounded-xl cursor-not-allowed">
+                  Analysing… please wait
+                </button>
+              )}
+            </div>
+          ) : audioQuality && (
+            <div className="space-y-2.5">
+              {/* Noise / SNR */}
+              <div className="flex items-center gap-2">
+                {audioQuality.snrDb != null && audioQuality.snrDb >= 10
+                  ? <Volume2 className="w-4 h-4 shrink-0 text-green-500" />
+                  : <VolumeX className="w-4 h-4 shrink-0 text-red-500" />}
+                <span className="text-sm text-gray-700 flex-1">{audioQuality.noiseLabel}</span>
+                {audioQuality.snrDb != null && (
+                  <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
+                    audioQuality.snrDb >= 20 ? "bg-green-100 text-green-700"
+                    : audioQuality.snrDb >= 10 ? "bg-amber-100 text-amber-700"
+                    : "bg-red-100 text-red-700"
+                  }`}>{audioQuality.snrDb.toFixed(1)} dB</span>
+                )}
+              </div>
+
+              {/* Clarity */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 shrink-0 text-purple-500" />
+                  <span className="text-sm text-gray-700 flex-1">{audioQuality.clarityLabel}</span>
+                  {audioQuality.clarityScore != null && (
+                    <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
+                      audioQuality.clarityScore >= 70 ? "bg-green-100 text-green-700"
+                      : audioQuality.clarityScore >= 40 ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700"
+                    }`}>{Math.round(audioQuality.clarityScore)}%</span>
+                  )}
+                </div>
+                {audioQuality.clarityScore != null && (
+                  <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        audioQuality.clarityScore >= 70 ? "bg-green-400"
+                        : audioQuality.clarityScore >= 40 ? "bg-amber-400"
+                        : "bg-red-400"
+                      }`}
+                      style={{ width: `${Math.min(100, audioQuality.clarityScore)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Speaker count */}
+              <div className="flex items-center gap-2">
+                <Mic2 className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="text-sm text-gray-700 flex-1">
+                  {audioQuality.speakerCount != null ? `${audioQuality.speakerCount} speaker${audioQuality.speakerCount > 1 ? "s" : ""} detected` : "—"}
+                </span>
+                {audioQuality.speakerCount != null && audioQuality.speakerCount > 1 && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    Multi-Speaker
+                  </span>
+                )}
+              </div>
+              {/* Save Sample button — only in manualSave mode */}
+              {manualSave && audioFile && (
+                <button
+                  type="button"
+                  onClick={() => onAudioReady(audioFile)}
+                  className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white text-sm font-semibold rounded-xl transition"
+                >
+                  Save Sample
+                </button>
+              )}            </div>
+          )}
+        </div>
       )}
 
       {/* Required hint */}

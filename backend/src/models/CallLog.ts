@@ -14,6 +14,10 @@ export interface ICallLog extends Document {
   similarityScore: number;       // 0-100
   audioUrl?: string;             // optional stored audio
   notes?: string;
+  // Audio quality metrics
+  noiseLevel?: number;           // SNR in dB (higher = less noise)
+  clarityScore?: number;         // 0-100 (higher = clearer voice)
+  speakerCount?: number;         // number of detected speakers in the audio
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,17 +37,20 @@ const callLogSchema = new Schema<ICallLog>(
     agent: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
+      default: null,
     },
     prisoner: {
       type: Schema.Types.ObjectId,
       ref: "Prisoner",
-      required: true,
+      required: false,
+      default: null,
     },
     contact: {
       type: Schema.Types.ObjectId,
       ref: "Contact",
-      required: true,
+      required: false,
+      default: null,
     },
     date: {
       type: Date,
@@ -71,6 +78,21 @@ const callLogSchema = new Schema<ICallLog>(
     notes: {
       type: String,
       default: "",
+    },
+    noiseLevel: {
+      type: Number,
+      default: null,
+    },
+    clarityScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: null,
+    },
+    speakerCount: {
+      type: Number,
+      min: 1,
+      default: 1,
     },
   },
   {

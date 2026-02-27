@@ -61,14 +61,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{background:'#0B1F4B'}}>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-yellow-400 animate-spin" />
+          <p className="text-yellow-200 text-sm tracking-widest uppercase font-semibold">Authenticating…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen flex" style={{background:'#F2F4F7'}}>
       <Sidebar
         userEmail={user?.email}
         userRole={user?.role}
@@ -77,7 +80,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onChangePassword={() => setShowChangePassword(true)}
       />
 
-      <main className="ml-64 flex-1 p-10">{children}</main>
+      <main className="ml-72 flex-1 min-h-screen" style={{background:'#F2F4F7'}}>{children}</main>
 
       <CreateJailerModal
         isOpen={showCreateJailer}

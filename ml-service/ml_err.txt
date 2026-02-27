@@ -1,0 +1,15 @@
+C:\Users\Satyam Pandey\OneDrive\Desktop\prison-calling-system\ml-service\ml_service.py:10: UserWarning: Module 'speechbrain.pretrained' was deprecated, redirecting to 'speechbrain.inference'. Please update your script. This is a change from SpeechBrain 1.0. See: https://github.com/speechbrain/speechbrain/releases/tag/v1.0.0
+  from speechbrain.pretrained import SpeakerRecognition
+C:\Users\Satyam Pandey\OneDrive\Desktop\prison-calling-system\.venv\Lib\site-packages\speechbrain\utils\autocast.py:188: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  wrapped_fwd = torch.cuda.amp.custom_fwd(fwd, cast_inputs=cast_inputs)
+C:\Users\Satyam Pandey\OneDrive\Desktop\prison-calling-system\.venv\Lib\site-packages\speechbrain\utils\parameter_transfer.py:234: UserWarning: Requested Pretrainer collection using symlinks on Windows. This might not work; see `LocalStrategy` documentation. Consider unsetting `collect_in` in Pretrainer to avoid symlinking altogether.
+  warnings.warn(
+INFO:     Started server process [22264]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+forrtl: error (200): program aborting due to window-CLOSE event
+Image              PC                Routine            Line        Source             
+KERNELBASE.dll     00007FFBD083D64D  Unknown               Unknown  Unknown
+KERNEL32.DLL       00007FFBD324E8D7  Unknown               Unknown  Unknown
+ntdll.dll          00007FFBD3DCC40C  Unknown               Unknown  Unknown

@@ -127,29 +127,35 @@ function RiskBadge({ risk }: { risk: string }) {
 
 export default function AnalyticsPage() {
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">System Intelligence</h1>
-        <div className="flex items-center gap-3 text-gray-500">
-          <button className="hover:text-gray-700 transition-colors">
-            <Clock className="w-5 h-5" />
-          </button>
-          <button className="hover:text-gray-700 transition-colors">
-            <Bell className="w-5 h-5" />
-          </button>
-          <button className="hover:text-gray-700 transition-colors">
-            <User className="w-5 h-5" />
-          </button>
+    <div className="p-8" style={{minHeight:'100vh', background:'#F2F4F7'}}>
+      {/* ═══ PAGE HEADER ═══ */}
+      <div
+        className="mb-6 px-7 py-4 flex items-center justify-between"
+        style={{
+          background: 'linear-gradient(135deg, #0B1F4B 0%, #162d6b 100%)',
+          borderLeft: '5px solid #C9A227',
+          borderRadius: 4,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+        }}
+      >
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-0.5" style={{color:'rgba(201,162,39,0.7)'}}>Department of Prisons · Haryana</p>
+          <h1 className="text-xl font-black uppercase tracking-wide text-white">System Intelligence & Reports</h1>
+          <p className="text-white/40 text-xs mt-0.5">AI-powered analytics and compliance reporting</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5" style={{color:'rgba(201,162,39,0.6)'}} />
+          <Bell className="w-5 h-5" style={{color:'rgba(201,162,39,0.6)'}} />
+          <User className="w-5 h-5" style={{color:'rgba(201,162,39,0.6)'}} />
         </div>
       </div>
 
       {/* Top Row */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
         {/* System Trends */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">System Trends</h2>
-          <p className="text-xs text-gray-400 mb-4">Keyword Alerts</p>
+        <div style={{background:'#fff', border:'1px solid #CBD0D8', borderTop:'3px solid #0B1F4B', borderRadius:4}} className="p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{color:'#0B1F4B'}}>System Trends</p>
+          <p className="text-xs mb-4" style={{color:'#5A6073'}}>Keyword Alerts by Month</p>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -182,8 +188,8 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Detection Accuracy */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Detection Accuracy</h2>
+        <div style={{background:'#fff', border:'1px solid #CBD0D8', borderTop:'3px solid #0B1F4B', borderRadius:4}} className="p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{color:'#0B1F4B'}}>AI Detection Accuracy</p>
           <div className="flex justify-around items-center h-[180px]">
             {detectionMetrics.map((m) => (
               <DonutChart key={m.label} value={m.value} color={m.color} label={m.label} />
@@ -192,23 +198,21 @@ export default function AnalyticsPage() {
         </div>
 
         {/* High-Risk Prisoner Analysis */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">
-            High-Risk Prisoner Analysis
-          </h2>
+        <div style={{background:'#fff', border:'1px solid #CBD0D8', borderTop:'3px solid #7A0000', borderRadius:4}} className="p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{color:'#7A0000'}}>High-Risk Prisoner Analysis</p>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-400 border-b border-gray-100">
-                <th className="pb-2 text-left font-medium">Inmate ID</th>
-                <th className="pb-2 text-left font-medium">Risk Level</th>
-                <th className="pb-2 text-right font-medium">Alerts</th>
-                <th className="pb-2 text-right font-medium">Flagged Calls</th>
+              <tr style={{background:'#0B1F4B'}}>
+                <th className="pb-2 pt-2 pl-2 text-left text-[10px] font-bold uppercase tracking-widest text-white">Inmate ID</th>
+                <th className="pb-2 pt-2 text-left text-[10px] font-bold uppercase tracking-widest text-white">Risk</th>
+                <th className="pb-2 pt-2 text-right text-[10px] font-bold uppercase tracking-widest text-white">Alerts</th>
+                <th className="pb-2 pt-2 pr-2 text-right text-[10px] font-bold uppercase tracking-widest text-white">Flagged</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y" style={{borderColor:'#E5E8EC'}}>
               {highRiskPrisoners.map((p) => (
-                <tr key={p.id} className="text-gray-700">
-                  <td className="py-2.5 font-medium">{p.id}</td>
+                <tr key={p.id} className="transition" onMouseEnter={e=>(e.currentTarget as HTMLTableRowElement).style.background='#EEF0F8'} onMouseLeave={e=>(e.currentTarget as HTMLTableRowElement).style.background=''}>
+                  <td className="py-2.5 pl-2 font-mono text-xs" style={{color:'#0B1F4B', fontWeight:700}}>{p.id}</td>
                   <td className="py-2.5">
                     <RiskBadge risk={p.risk} />
                   </td>
@@ -224,8 +228,8 @@ export default function AnalyticsPage() {
       {/* Bottom Row */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Call Volume Heatmap */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Call Volume Heatmap</h2>
+        <div style={{background:'#fff', border:'1px solid #CBD0D8', borderTop:'3px solid #0B1F4B', borderRadius:4}} className="p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{color:'#0B1F4B'}}>Call Volume Heatmap</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-gray-500 border-separate border-spacing-1">
               <thead>
@@ -259,27 +263,24 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Compliance Reports */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Compliance Reports</h2>
+        <div style={{background:'#fff', border:'1px solid #CBD0D8', borderTop:'3px solid #C9A227', borderRadius:4}} className="p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{color:'#0B1F4B'}}>Compliance Reports</p>
           <div className="grid grid-cols-2 gap-4">
-            <div className="border border-gray-100 rounded-lg p-4">
-              <p className="text-xs text-gray-500 mb-1">Recorded Calls Reviewed</p>
-              <p className="text-3xl font-bold text-gray-900">3,250</p>
+            <div className="p-4" style={{border:'1px solid #CBD0D8', borderRadius:3}}>
+              <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color:'#5A6073'}}>Recorded Calls Reviewed</p>
+              <p className="text-3xl font-black" style={{color:'#0B1F4B'}}>3,250</p>
             </div>
-            <div className="border border-gray-100 rounded-lg p-4">
-              <p className="text-xs text-gray-500 mb-1">Policy Violations</p>
-              <p className="text-3xl font-bold text-red-500">58</p>
+            <div className="p-4" style={{border:'1px solid #fca5a5', borderRadius:3, background:'#fff5f5'}}>
+              <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color:'#5A6073'}}>Policy Violations</p>
+              <p className="text-3xl font-black" style={{color:'#7A0000'}}>58</p>
             </div>
-            <div className="border border-gray-100 rounded-lg p-4">
-              <p className="text-xs text-gray-500 mb-1">Non-Compliant Calls</p>
-              <p className="text-3xl font-bold text-gray-900">112</p>
+            <div className="p-4" style={{border:'1px solid #CBD0D8', borderRadius:3}}>
+              <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color:'#5A6073'}}>Non-Compliant Calls</p>
+              <p className="text-3xl font-black" style={{color:'#0B1F4B'}}>112</p>
             </div>
-            <div className="border border-gray-100 rounded-lg p-4">
-              <p className="text-xs text-gray-500 mb-1">Audit Pass Rate</p>
-              <p className="text-3xl font-bold text-gray-900">
-                94%{" "}
-                <span className="text-green-500 text-base font-semibold">▲</span>
-              </p>
+            <div className="p-4" style={{border:'1px solid #d1fae5', borderRadius:3, background:'#f0fdf4'}}>
+              <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color:'#5A6073'}}>Audit Pass Rate</p>
+              <p className="text-3xl font-black" style={{color:'#065f46'}}>94% <span style={{fontSize:'1rem', color:'#22c55e'}}>&#9650;</span></p>
             </div>
           </div>
         </div>

@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Haryana Prison System – Government Colour Tokens ── */
+  --gov-navy:        #0B1F4B;
+  --gov-navy-light:  #12306B;
+  --gov-maroon:      #7A0000;
+  --gov-gold:        #C9A227;
+  --gov-gold-light:  #E8C84A;
+  --gov-surface:     #F2F4F7;
+  --gov-white:       #FFFFFF;
+  --gov-border:      #CBD0D8;
+  --gov-text:        #1A1A1A;
+  --gov-muted:       #5A6073;
+
+  --background: var(--gov-surface);
+  --foreground: var(--gov-text);
 }
 
 @theme inline {
@@ -11,15 +23,57 @@
   --font-sans: var(--font-poppins);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Govt table style ── */
+.govt-table thead tr {
+  background-color: var(--gov-navy);
+  color: #fff;
+}
+.govt-table thead th {
+  padding: 10px 16px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.govt-table tbody tr {
+  border-bottom: 1px solid var(--gov-border);
+}
+.govt-table tbody tr:hover {
+  background-color: #EEF0F8;
+}
+.govt-table tbody td {
+  padding: 10px 16px;
+  font-size: 0.8rem;
+  color: #1a1a1a;
+}
+
+/* ── Page header stripe ── */
+.page-header-stripe {
+  background: linear-gradient(135deg, var(--gov-navy) 0%, #162d6b 100%);
+  border-left: 5px solid var(--gov-gold);
+}
+
+/* ── Govt card ── */
+.govt-card {
+  background: #fff;
+  border: 1px solid var(--gov-border);
+  border-top: 3px solid var(--gov-navy);
+  border-radius: 4px;
+}
+
+/* ── Govt badge ── */
+.badge-active   { background:#d1fae5; color:#065f46; font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:.06em; }
+.badge-inactive { background:#fee2e2; color:#991b1b; font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:.06em; }
+.badge-high     { background:#fee2e2; color:#991b1b; font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:.06em; }
+.badge-medium   { background:#fef3c7; color:#92400e; font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:.06em; }
+.badge-low      { background:#d1fae5; color:#065f46; font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:.06em; }
+
+/* Gold divider */
+.gold-rule { border:none; height:2px; background: linear-gradient(to right, var(--gov-gold), transparent); margin: 0; }
+

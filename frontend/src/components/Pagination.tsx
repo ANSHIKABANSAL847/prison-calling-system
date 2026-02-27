@@ -45,9 +45,9 @@ export default function Pagination({
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-      <p className="text-sm text-gray-500">
-        Showing {from}–{to} of {total}
+    <div className="flex items-center justify-between px-4 py-3" style={{borderTop:'1px solid #E5E8EC', background:'#F9FAFB'}}>
+      <p className="text-xs font-semibold uppercase tracking-widest" style={{color:'#5A6073'}}>
+        Showing {from}–{to} of {total} records
       </p>
 
       <div className="flex items-center gap-1">
@@ -55,7 +55,8 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-40 transition cursor-pointer"
+          className="p-1.5 transition cursor-pointer disabled:opacity-40"
+          style={{border:'1px solid #CBD0D8', borderRadius:3, color:'#0B1F4B'}}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -73,11 +74,12 @@ export default function Pagination({
             <button
               key={pg}
               onClick={() => onPageChange(pg as number)}
-              className={`w-8 h-8 rounded text-sm font-medium transition cursor-pointer ${
+              className="w-8 h-8 text-xs font-bold transition cursor-pointer"
+              style={
                 pg === page
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "border border-gray-200 text-gray-600 hover:bg-white"
-              }`}
+                  ? {background:'#0B1F4B', color:'#C9A227', borderRadius:3}
+                  : {border:'1px solid #CBD0D8', borderRadius:3, color:'#0B1F4B'}
+              }
             >
               {pg}
             </button>
@@ -88,7 +90,8 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-40 transition cursor-pointer"
+          className="p-1.5 transition cursor-pointer disabled:opacity-40"
+          style={{border:'1px solid #CBD0D8', borderRadius:3, color:'#0B1F4B'}}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

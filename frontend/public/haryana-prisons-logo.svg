@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Shield background -->
+  <path d="M50 5 L90 20 L90 55 Q90 80 50 95 Q10 80 10 55 L10 20 Z" fill="#1a3a6b" stroke="#c9a84c" stroke-width="3"/>
+  <!-- Inner shield highlight -->
+  <path d="M50 14 L82 27 L82 55 Q82 74 50 87 Q18 74 18 55 L18 27 Z" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <!-- Emblem circle -->
+  <circle cx="50" cy="48" r="18" fill="#c9a84c" opacity="0.9"/>
+  <!-- HP letters -->
+  <text x="50" y="54" font-family="Georgia, serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#1a3a6b">HP</text>
+  <!-- Stars -->
+  <polygon points="30,22 31.5,27 36,27 32.5,30 34,35 30,32 26,35 27.5,30 24,27 28.5,27" fill="#c9a84c"/>
+  <polygon points="70,22 71.5,27 76,27 72.5,30 74,35 70,32 66,35 67.5,30 64,27 68.5,27" fill="#c9a84c"/>
+</svg>

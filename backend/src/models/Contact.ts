@@ -20,9 +20,9 @@ export interface IContact extends Document {
   isVerified: boolean;
 
   // Voice fields
-  voicePath?: string;           // Cloudinary URL of the enrolled voice recording
-  voiceSamples: number;         // Number of samples
-  verificationAccuracy: number; // % from ML
+  voicePaths: string[];          // Cloudinary URLs of all enrolled voice samples
+  voiceSamples: number;          // Number of samples (= voicePaths.length)
+  verificationAccuracy: number;  // Last verification score (0–100)
 
   createdAt: Date;
   updatedAt: Date;
@@ -66,9 +66,9 @@ const contactSchema = new Schema<IContact>(
     },
 
     // Voice
-    voicePath: {
-      type: String,
-      default: null,
+    voicePaths: {
+      type: [String],
+      default: [],
     },
     voiceSamples: {
       type: Number,

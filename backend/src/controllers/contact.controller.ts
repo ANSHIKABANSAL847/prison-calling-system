@@ -70,7 +70,7 @@ export async function getContacts(req: Request, res: Response): Promise<void> {
     }
 
     const contacts = await Contact.find({ prisoner: prisonerId })
-      .select("contactName relation phoneNumber photo isVerified createdAt")
+      .select("contactName relation phoneNumber photo isVerified voicePaths voiceSamples createdAt")
       .sort({ createdAt: -1 })
       .lean();
 

@@ -3,42 +3,13 @@
 import { useState, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PhotoUploader from "@/components/PhotoUploader";
-import {
-  Loader2, Pencil, ArrowLeft, User, Phone, Shield, Mic,
-} from "lucide-react";
+import { Loader2, Pencil, ArrowLeft, User, Phone, Shield, Mic, CheckCircle2, XCircle, PlusCircle } from "lucide-react";
 import VoiceRecorder from "../../prisoner/components/VoiceRecorder";
+import SectionHeader from "../components/SectionHeader";
+import { RELATION_OPTIONS, SINGLETON_RELATIONS } from "../components/constants";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-// ─── Section Card Header ──────────────────────────────────────────────────────
-
-function SectionHeader({
-  icon, title, subtitle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 pb-4 border-b border-gray-100">
-      <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center shrink-0">
-        {icon}
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-gray-900">{title}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-      </div>
-    </div>
-  );
-}
-
-const RELATION_OPTIONS = [
-  "Wife", "Husband", "Father", "Mother", "Brother",
-  "Sister", "Son", "Daughter", "Lawyer", "Friend", "Other",
-] as const;
-
-// Relations where only ONE contact is allowed per prisoner
-const SINGLETON_RELATIONS = ["Father", "Mother", "Wife", "Husband"] as const;
 
 interface PrisonerInfo {
   _id: string;
@@ -73,7 +44,9 @@ function EditContactInner() {
   const [isVerified, setIsVerified]     = useState(false);
 
   // Voice
-  const [voiceFile, setVoiceFile]       = useState<File | null>(null);
+  const [storedSampleCount, setStoredSampleCount] = useState(0);
+  const [newVoiceFiles, setNewVoiceFiles]       = useState<File[]>([]);
+  const [showRecorder, setShowRecorder]         = useState(false);
 
   // Submit state
   const [loading, setLoading]           = useState(false);
@@ -120,6 +93,7 @@ function EditContactInner() {
         setPhoneNumber(contact.phoneNumber || "");
         setPhoto(contact.photo || "");
         setIsVerified(contact.isVerified || false);
+        setStoredSampleCount(contact.voiceSamples || 0);
 
         // Derive singleton relations taken by OTHER contacts (exclude self)
         const taken = (contactsData.contacts as { _id: string; relation: string }[])
@@ -183,12 +157,11 @@ function EditContactInner() {
         return;
       }
 
-      // 2. Re-enroll voice only if a new file was provided
-      if (voiceFile) {
+      // 2. Enroll any new voice samples on top of existing ones
+      for (const file of newVoiceFiles) {
         const voiceData = new FormData();
-        voiceData.append("audio", voiceFile);
+        voiceData.append("audio", file);
         voiceData.append("contactId", contactId!);
-
         const voiceRes = await fetch(`${API_URL}/api/voice/enroll`, {
           method: "POST",
           credentials: "include",
@@ -397,24 +370,56 @@ function EditContactInner() {
             </div>
           </div>
 
-          {/* ── RIGHT COLUMN: Voice Re-enrollment ──────────────────── */}
+          {/* ── RIGHT COLUMN: Voice Samples ──────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col gap-4">
             <SectionHeader
               icon={<Mic className="w-4 h-4" />}
-              title="Voice Enrollment"
-              subtitle={
-                isVerified
-                  ? "Already enrolled — record or upload a new sample to update"
-                  : "Record or upload 3–10 seconds of the contact's voice for AI verification"
-              }
+              title="Voice Samples"
+              subtitle="Add more samples to improve verification accuracy"
             />
-            {isVerified && !voiceFile && (
+
+            {/* Stored samples badge */}
+            {storedSampleCount > 0 && (
               <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-medium">
                 <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                Voice already enrolled — leave empty to keep existing voice sample
+                {storedSampleCount} sample{storedSampleCount !== 1 ? "s" : ""} already stored — new recordings will be added on top
               </div>
             )}
-            <VoiceRecorder onAudioReady={(file) => setVoiceFile(file)} />
+
+            {/* New samples staged for upload */}
+            {newVoiceFiles.length > 0 && (
+              <div className="space-y-2">
+                {newVoiceFiles.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="font-medium text-blue-800">New Sample {i + 1}</span>
+                      <span className="text-blue-500 text-xs">— {(f.size / 1024).toFixed(0)} KB</span>
+                    </div>
+                    <button type="button"
+                      onClick={() => setNewVoiceFiles(newVoiceFiles.filter((_, idx) => idx !== i))}
+                      className="text-red-400 hover:text-red-600 transition">
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recorder */}
+            {showRecorder ? (
+              <VoiceRecorder manualSave onAudioReady={(file) => {
+                if (file) setNewVoiceFiles((prev) => [...prev, file]);
+                setShowRecorder(false);
+              }} />
+            ) : (
+              <button type="button"
+                onClick={() => setShowRecorder(true)}
+                className="cursor-pointer flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-gray-500 rounded-xl px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 transition">
+                <PlusCircle className="w-4 h-4" />
+                Add Voice Sample
+              </button>
+            )}
           </div>
         </div>
 
