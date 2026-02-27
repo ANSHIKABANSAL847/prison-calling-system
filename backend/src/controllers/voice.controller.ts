@@ -5,9 +5,8 @@ import Prisoner from "../models/Prisoner";
 import cloudinary from "../config/cloudinary";
 import axios from "axios";
 import FormData from "form-data";
-import fs from "fs";
 
-
+const ML_BASE = process.env.ML_SERVICE_URL || "http://127.0.0.1:8001";
 /** Upload buffer to Cloudinary and return the secure URL */
 async function uploadAudioToCloudinary(
   buffer: Buffer,
@@ -42,62 +41,20 @@ async function deletePreviousVoice(url: string): Promise<void> {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// POST /api/voice/enroll
-// Accepts either { prisonerId } for prisoner enrollment
-//             or { contactId }  for contact enrollment
-// ──────────────────────────────────────────────────────────────────────────────
 export async function enrollVoice(req: Request, res: Response): Promise<void> {
   try {
-    const { contactId, prisonerId } = req.body;
+    console.log("BODY:", req.body);
+    console.log("FILE:", req.file?.originalname);
 
-    if (!contactId && !prisonerId) {
-      res.status(400).json({ message: "Provide either contactId or prisonerId" });
-      return;
-    }
+    const contactId = req.body.contactId;
 
-    if (!req.file || !req.file.buffer) {
+    if (!req.file) {
       res.status(400).json({ message: "No audio file uploaded" });
       return;
     }
 
-    // ── Prisoner voice enrollment ────────────────────────────────────────────
-    if (prisonerId) {
-      if (!mongoose.Types.ObjectId.isValid(prisonerId)) {
-        res.status(400).json({ message: "Invalid prisonerId" });
-        return;
-      }
-
-      const prisoner = await Prisoner.findById(prisonerId);
-      if (!prisoner) {
-        res.status(404).json({ message: "Prisoner not found" });
-        return;
-      }
-
-      if (prisoner.voicePath) {
-        await deletePreviousVoice(prisoner.voicePath);
-      }
-
-      const voiceUrl = await uploadAudioToCloudinary(
-        req.file.buffer,
-        `prisoner_${prisonerId}_${Date.now()}`
-      );
-
-      prisoner.voicePath = voiceUrl;
-      prisoner.voiceSamples = (prisoner.voiceSamples || 0) + 1;
-      await prisoner.save();
-
-      res.status(200).json({
-        message: "Prisoner voice enrolled successfully",
-        voicePath: voiceUrl,
-        prisonerId: prisoner._id,
-      });
-      return;
-    }
-
-    // ── Contact voice enrollment ─────────────────────────────────────────────
-    if (!mongoose.Types.ObjectId.isValid(contactId)) {
-      res.status(400).json({ message: "Invalid contactId" });
+    if (!contactId) {
+      res.status(400).json({ message: "contactId missing from form-data" });
       return;
     }
 
@@ -107,71 +64,74 @@ export async function enrollVoice(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (contact.voicePath) {
-      await deletePreviousVoice(contact.voicePath);
-    }
-
-    const voiceUrl = await uploadAudioToCloudinary(
-      req.file.buffer,
-      `contact_${contactId}_${Date.now()}`
-    );
-
-    contact.voicePath = voiceUrl;
-    contact.voiceSamples = (contact.voiceSamples || 0) + 1;
-    contact.verificationAccuracy = 0;
-    contact.isVerified = true;
-    // 🔹 Send audio to Python ML service
     const formData = new FormData();
-    formData.append("name", contact.contactName);
-    formData.append("file", fs.createReadStream(req.file.path));
+    formData.append("contactId", contactId);
+    formData.append("file", req.file.buffer, {
+      filename: "voice.wav",
+      contentType: "audio/wav",
+    });
 
-    const mlResponse = await axios.post(
-      "http://127.0.0.1:8000/enroll",
-      formData,
-      { headers: formData.getHeaders() }
-    );
+    const mlResponse = await axios.post(`${ML_BASE}/enroll`, formData, {
+      headers: formData.getHeaders(),
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
 
-    // 🔹 Save info in DB
-    contact.voicePath = req.file.path;
     contact.voiceSamples = (contact.voiceSamples || 0) + 1;
-    contact.verificationAccuracy = 0;
+    contact.isVerified = true;
     await contact.save();
 
-    res.status(200).json({
-      message: "Voice enrolled successfully",
-      voicePath: voiceUrl,
-      ml: mlResponse.data,
-      contactId: contact._id,
-      isVerified: true,
-    });
-  } catch (err) {
-    console.error("Enroll voice error:", err);
-    res.status(500).json({ message: "Failed to enroll voice" });
+    res.json({ success: true });
+
+  } catch (err: any) {
+    console.error("ENROLL ERROR FULL:", err);
+    res.status(500).json({ message: err.message });
   }
 }
-
 export async function verifyVoice(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.file) {
+    console.log("Verify request received");
+
+    if (!req.file || !req.file.buffer) {
+      console.error(" No file in request");
       res.status(400).json({ message: "No audio file uploaded" });
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(req.file.path));
+    console.log("File received:", {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.buffer.length,
+    });
 
-    const mlResponse = await axios.post(
-      "http://127.0.0.1:8000/verify",
-      formData,
-      { headers: formData.getHeaders() }
-    );
+    const formData = new FormData();
+    formData.append("contactId", req.body.contactId);
+    formData.append("file", req.file.buffer, {
+      filename: "verify.wav", // FORCE WAV NAME
+      contentType: "audio/wav", // FORCE WAV TYPE
+      knownLength: req.file.buffer.length,
+    });
+
+    console.log(" Sending to ML service:", `${ML_BASE}/verify`);
+
+    const mlResponse = await axios.post(`${ML_BASE}/verify`, formData, {
+      headers: { ...formData.getHeaders() },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 120000,
+    });
+
+    console.log(" ML response:", mlResponse.data);
 
     res.status(200).json({
       message: "Voice verification completed",
       result: mlResponse.data,
     });
-  } catch (err) {
-    console.error("Verify voice error:", err);
-    res.status(500).json({ message: "Failed to verify voice" });
+  } catch (err: any) {
+    console.error(" VERIFY VOICE ERROR FULL:", err?.response?.data || err.message || err);
+    res.status(500).json({
+      message: "Failed to verify voice",
+      error: err?.response?.data || err.message || "Unknown error",
+    });
   }
 }

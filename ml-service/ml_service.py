@@ -1,108 +1,160 @@
 import os
-
-#  Disable symlinks on Windows (IMPORTANT)
-os.environ["SB_DISABLE_SYMLINKS"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
-
-# Optional but recommended: force cache dirs
-os.environ["SPEECHBRAIN_CACHE_DIR"] = os.path.abspath("audio_cache")
-os.environ["HF_HOME"] = os.path.abspath("hf_cache")
-
-from fastapi import FastAPI, UploadFile, File, Form
+import subprocess
+import threading
 import numpy as np
-from speechbrain.pretrained import SpeakerRecognition
 import shutil
 import uuid
 
+from fastapi import FastAPI, UploadFile, File, Form
+from speechbrain.pretrained import SpeakerRecognition
+
+# ─────────────────────────────────────────────
+# Environment Setup
+# ─────────────────────────────────────────────
+
+os.environ["SB_DISABLE_SYMLINKS"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
+os.environ["SPEECHBRAIN_CACHE_DIR"] = os.path.abspath("audio_cache")
+os.environ["HF_HOME"] = os.path.abspath("hf_cache")
+
+# ─────────────────────────────────────────────
+# App Init
+# ─────────────────────────────────────────────
+
 app = FastAPI(title="Voice Verification Service")
 
-# Load model once
 model = SpeakerRecognition.from_hparams(
     source="speechbrain/spkrec-ecapa-voxceleb",
     savedir="pretrained_models"
 )
 
 DB_PATH = "voices_db.npy"
+db_lock = threading.Lock()
 
-# Load or create DB
+# Load DB safely
 if os.path.exists(DB_PATH):
     voices_db = np.load(DB_PATH, allow_pickle=True).item()
 else:
     voices_db = {}
 
+# ─────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────
+
+def convert_to_wav(input_path: str, output_path: str):
+    try:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", input_path,
+            "-ac", "1",
+            "-ar", "16000",
+            output_path
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        raise Exception("FFmpeg conversion failed. Ensure FFmpeg is installed.")
+
 def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+
+    return float(np.dot(a, b) / (norm_a * norm_b))
+
+# ─────────────────────────────────────────────
+# Routes
+# ─────────────────────────────────────────────
 
 @app.get("/")
 def root():
     return {"message": "Voice ML Service is running"}
 
-# -------- ENROLL --------
+@app.get("/debug")
+def debug():
+    return {"stored_ids": list(voices_db.keys())}
+
+# ─────────────────────────────────────────────
+# ENROLL
+# ─────────────────────────────────────────────
+
 @app.post("/enroll")
-async def enroll(name: str = Form(...), file: UploadFile = File(...)):
-    ext = os.path.splitext(file.filename)[1] or ".wav"
-    temp_path = f"temp_{uuid.uuid4().hex}{ext}"
+async def enroll(contactId: str = Form(...), file: UploadFile = File(...)):
+    raw_path = f"raw_{uuid.uuid4().hex}"
+    wav_path = f"conv_{uuid.uuid4().hex}.wav"
 
     try:
-        with open(temp_path, "wb") as buffer:
+        with open(raw_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        print("File saved:", temp_path)
+        convert_to_wav(raw_path, wav_path)
 
-        signal = model.load_audio(temp_path)
-        print("Audio loaded:", signal.shape)
-
+        signal = model.load_audio(wav_path)
         embedding = model.encode_batch(signal).squeeze().detach().cpu().numpy()
-        print("Embedding extracted")
 
-        voices_db[name] = embedding
-        np.save(DB_PATH, voices_db)
+        with db_lock:
+            voices_db[contactId] = embedding
+            np.save(DB_PATH, voices_db)
 
-        return {"status": "success", "message": f"Voice enrolled for {name}"}
+        return {
+            "status": "success",
+            "contactId": contactId
+        }
 
     except Exception as e:
-        print(" ML ENROLL ERROR:", e)
+        print("ENROLL ERROR:", e)
         return {"status": "error", "message": str(e)}
 
     finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-# -------- VERIFY --------
+        if os.path.exists(raw_path):
+            os.remove(raw_path)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
+
+# ─────────────────────────────────────────────
+# VERIFY (1:1 Matching)
+# ─────────────────────────────────────────────
+
 @app.post("/verify")
-async def verify(file: UploadFile = File(...)):
-    if len(voices_db) == 0:
-        return {"authorized": False, "message": "No voices enrolled yet"}
+async def verify(contactId: str = Form(...), file: UploadFile = File(...)):
 
-    temp_path = f"temp_{uuid.uuid4().hex}.wav"
-
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    signal = model.load_audio(temp_path)
-    test_embedding = model.encode_batch(signal).squeeze().detach().cpu().numpy()
-
-    best_score = -1
-    best_person = None
-
-    for person, emb in voices_db.items():
-        score = cosine_similarity(test_embedding, emb)
-        if score > best_score:
-            best_score = score
-            best_person = person
-
-    os.remove(temp_path)
-
-    THRESHOLD = 0.7
-
-    if best_score >= THRESHOLD:
-        return {
-            "authorized": True,
-            "person": best_person,
-            "score": float(best_score)
-        }
-    else:
+    if contactId not in voices_db:
         return {
             "authorized": False,
-            "person": None,
-            "score": float(best_score)
+            "message": "Voice not enrolled for this contact"
         }
+
+    raw_path = f"raw_{uuid.uuid4().hex}"
+    wav_path = f"conv_{uuid.uuid4().hex}.wav"
+
+    try:
+        with open(raw_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        convert_to_wav(raw_path, wav_path)
+
+        signal = model.load_audio(wav_path)
+        test_embedding = model.encode_batch(signal).squeeze().detach().cpu().numpy()
+
+        stored_embedding = voices_db[contactId]
+        score = cosine_similarity(test_embedding, stored_embedding)
+
+        THRESHOLD = 0.7
+
+        return {
+            "authorized": bool(score >= THRESHOLD),
+            "score": score,
+            "contactId": contactId
+        }
+
+    except Exception as e:
+        print(" VERIFY ERROR:", e)
+        return {"authorized": False, "error": str(e)}
+
+    finally:
+        if os.path.exists(raw_path):
+            os.remove(raw_path)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)

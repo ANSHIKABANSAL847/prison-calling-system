@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // ── Fail fast if critical secrets are missing ──
-const REQUIRED_ENV = ["JWT_SECRET", "JWT_REFRESH_SECRET", "MONGODB_URI"] as const;
+const REQUIRED_ENV = ["JWT_SECRET", "JWT_REFRESH_SECRET", "DB_URL"] as const;
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`[FATAL] Missing required environment variable: ${key}`);

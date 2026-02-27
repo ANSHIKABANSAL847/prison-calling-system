@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Flag, PhoneOff, Bell, ChevronDown, CheckCircle, XCircle, User } from "lucide-react";
+import VoiceRecorder from "@/app/prisoner/components/VoiceRecorder";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -136,7 +137,7 @@ const CALL_ID = Math.floor(Math.random() * 9_000_000 + 1_000_000).toString();
 
 export default function LiveMonitorPage() {
   const router = useRouter();
-
+const lastClipRef = useRef<File | null>(null);
   // Prisoner list
   const [prisoners, setPrisoners]   = useState<PrisonerOption[]>([]);
   const [selected, setSelected]     = useState<PrisonerOption | null>(null);
@@ -155,6 +156,7 @@ export default function LiveMonitorPage() {
   const [terminated, setTerminated]       = useState(false);
   const [alertSent, setAlertSent]         = useState(false);
   const [toast, setToast]                 = useState<string | null>(null);
+  
 
   // Auth guard
   useEffect(() => {
@@ -186,23 +188,9 @@ export default function LiveMonitorPage() {
   }, [selected]);
 
   // Simulate similarity score rising when call is active
-  useEffect(() => {
-    if (!callActive) return;
-    const id = setInterval(() => {
-      setSimilarity((s) => {
-        const target = selected?.riskTags?.includes("High Risk") ? 65 : 91;
-        const diff = target - s;
-        return Math.min(100, s + (diff * 0.08) + (Math.random() - 0.3) * 2);
-      });
-    }, 400);
-    return () => clearInterval(id);
-  }, [callActive, selected]);
 
-  // Auto-set verified/identity after score rises
-  useEffect(() => {
-    if (similarity >= 80 && !verified) setVerified(true);
-    if (similarity >= 88 && !identityConfirmed) setIdConf(true);
-  }, [similarity, verified, identityConfirmed]);
+
+
 
   // Elapsed timer
   useEffect(() => {
@@ -225,18 +213,20 @@ export default function LiveMonitorPage() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  function startCall() {
-    if (!selected) { showToast("Select a user profile first."); return; }
-    setCallActive(true);
-    setElapsed(0);
-    setSimilarity(0);
-    setVerified(false);
-    setIdConf(false);
-    setFlagged(false);
-    setTerminated(false);
-    setAlertSent(false);
-  }
+  const verifiedContact = contacts.find((c) => c.isVerified) ?? contacts[0] ?? null;
 
+function startCall() {
+  if (!selected) { showToast("Select a user profile first."); return; }
+  setCallActive(true);
+  setElapsed(0);
+  setSimilarity(0);
+  setVerified(false);
+  setIdConf(false);
+  setFlagged(false);
+  setTerminated(false);
+  setAlertSent(false);
+ 
+}
   function handleFlag() {
     setFlagged(true);
     showToast(`Call ${CALL_ID} has been flagged for review.`);
@@ -252,8 +242,78 @@ export default function LiveMonitorPage() {
     setAlertSent(true);
     showToast("Alert sent to supervisors.");
   }
+async function verifyVoiceFromUI(file: File) {
+  try {
+    if (!verifiedContact?._id) {
+      showToast("No verified contact selected");
+      return;
+    }
 
-  const verifiedContact = contacts.find((c) => c.isVerified) ?? contacts[0] ?? null;
+    const fd = new FormData();
+    fd.append("contactId", verifiedContact._id); //  correct id
+    fd.append("audio", file);                   // correct field name
+
+    const res = await fetch(`${API_URL}/api/voice/verify`, {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Verify error:", data);
+      showToast(data?.message || "Voice verification failed");
+      return;
+    }
+
+    const result = data.result;
+
+    if (typeof result?.score === "number") {
+      const percent = Math.round(result.score * 100);
+      setSimilarity(percent);
+
+      if (result.authorized) {
+        setVerified(true);
+        setIdConf(true);
+      } else {
+        setVerified(false);
+        setIdConf(false);
+
+        if (!alertSent) {
+          setAlertSent(true);
+          showToast("Unauthorized voice detected! Alert sent.");
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error("Verify exception:", err);
+    showToast("Verification error");
+  }
+}
+
+
+// When we get a new clip from VoiceRecorder, store it
+function handleNewClip(file: File) {
+  console.log("🎙 New clip received:", file);
+  lastClipRef.current = file;
+  showToast("Verifying voice...");
+  verifyVoiceFromUI(file);
+}
+useEffect(() => {
+  if (!callActive) return;
+
+  const interval = setInterval(() => {
+    if (lastClipRef.current) {
+      console.log(" Re-verifying voice...");
+      verifyVoiceFromUI(lastClipRef.current);
+    }
+  }, 10000); // every 10 seconds
+
+  return () => clearInterval(interval);
+}, [callActive]);
+  
 
   return (
     <div className="space-y-4">
@@ -339,7 +399,13 @@ export default function LiveMonitorPage() {
           )}
         </div>
       </div>
-
+<VoiceRecorder
+  onAudioReady={(file) => {
+    if (file) {
+      handleNewClip(file);
+    }
+  }}
+/>
       {/* ── Waveform ── */}
       <div className="bg-gray-950 rounded-xl overflow-hidden border border-gray-800">
         <div className="relative h-32 px-2 py-2">
