@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import Prisoner from "../models/Prisoner";
-import Contact from "../models/Contact";
 import CallLog from "../models/CallLog";
 
 // ──────────────────────────────────────
@@ -16,16 +15,14 @@ export async function getDashboardStats(
     const [
       totalPrisoners,
       activePrisoners,
-      totalContacts,
-      verifiedContacts,
       activeCalls,
       totalAlerts,
     ] = await Promise.all([
       Prisoner.countDocuments(),
       Prisoner.countDocuments({ isActive: true }),
-      Contact.countDocuments(),
-      Contact.countDocuments({ isVerified: true }),
-      CallLog.countDocuments({ verificationResult: "Pending", date: { $gte: since30min } }),
+      CallLog.countDocuments({
+        date: { $gte: since30min },
+      }),
       CallLog.countDocuments({ verificationResult: "Failed" }),
     ]);
 
@@ -34,11 +31,6 @@ export async function getDashboardStats(
         total: totalPrisoners,
         active: activePrisoners,
         inactive: totalPrisoners - activePrisoners,
-      },
-      contacts: {
-        total: totalContacts,
-        verified: verifiedContacts,
-        unverified: totalContacts - verifiedContacts,
       },
       activeCalls,
       alerts: totalAlerts,
@@ -71,7 +63,6 @@ export async function getDashboardLive(
     const [recentCalls, callsTotal, recentAlerts, alertsTotal] = await Promise.all([
       CallLog.find({ date: { $gte: todayStart } })
         .populate("prisoner", "fullName prisonerId")
-        .populate("contact", "contactName relation phoneNumber")
         .populate("agent", "name")
         .sort({ date: -1 })
         .skip((callPage - 1) * PAGE_SIZE)
@@ -80,7 +71,6 @@ export async function getDashboardLive(
       CallLog.countDocuments({ date: { $gte: todayStart } }),
       CallLog.find({ verificationResult: "Failed", date: { $gte: todayStart } })
         .populate("prisoner", "fullName prisonerId")
-        .populate("contact", "contactName relation")
         .sort({ date: -1 })
         .skip((alertPage - 1) * PAGE_SIZE)
         .limit(PAGE_SIZE)

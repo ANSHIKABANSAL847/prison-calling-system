@@ -19,7 +19,7 @@ import hpp from "hpp";
 import mongoSanitize from "express-mongo-sanitize";
 import authRoutes from "./routes/auth";
 import prisonerRoutes from "./routes/prisoner";
-import contactRoutes from "./routes/contact";
+
 import statsRoutes from "./routes/stats";
 import uploadRoutes from "./routes/upload";
 import callLogRoutes from "./routes/callLog";
@@ -58,7 +58,6 @@ app.use(globalLimiter);                     // Global rate limit: 100 req / 15 m
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/prisoners", prisonerRoutes);
-app.use("/api/contacts", contactRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/call-logs", callLogRoutes);

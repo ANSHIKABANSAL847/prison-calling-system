@@ -32,11 +32,6 @@ function getSampleLogs() {
         prisonerId: "PR-9087",
         prisonName: "Tihar Jail",
       },
-      contact: {
-        contactName: "Sunita Kumar",
-        relation: "Wife",
-        phoneNumber: "9876543210",
-      },
     },
     {
       _id: "sample2",
@@ -55,11 +50,6 @@ function getSampleLogs() {
         prisonerId: "PR-1123",
         prisonName: "Yerwada Central Jail",
       },
-      contact: {
-        contactName: "Mahesh Yadav",
-        relation: "Brother",
-        phoneNumber: "9123456780",
-      },
     },
     {
       _id: "sample3",
@@ -77,11 +67,6 @@ function getSampleLogs() {
         fullName: "Arjun Mehta",
         prisonerId: "PR-7781",
         prisonName: "Arthur Road Jail",
-      },
-      contact: {
-        contactName: "Neha Mehta",
-        relation: "Sister",
-        phoneNumber: "9988776655",
       },
     },
   ];
@@ -127,13 +112,12 @@ export async function getCallLogs(req: Request, res: Response): Promise<void> {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const skip = (pageNum - 1) * limitNum;
 
-    const query = CallLog.find(filter)
-      .populate("agent", "name email role")
-      .populate("prisoner", "fullName prisonerId prisonName")
-      .populate("contact", "contactName relation phoneNumber")
-      .sort({ date: -1 })
-      .skip(skip)
-      .limit(limitNum);
+const query = CallLog.find(filter)
+  .populate("agent", "name email role")
+  .populate("prisoner", "fullName prisonerId prisonName")
+  .sort({ date: -1 })
+  .skip(skip)
+  .limit(limitNum);
 
     const [logs, total] = await Promise.all([
       query.lean(),
@@ -164,13 +148,11 @@ export async function getCallLogs(req: Request, res: Response): Promise<void> {
       const q = search.toLowerCase();
       results = logs.filter((l: any) => {
         const sid = l.sessionId?.toLowerCase() ?? "";
-        const contactName = l.contact?.contactName?.toLowerCase() ?? "";
         const prisonerName = l.prisoner?.fullName?.toLowerCase() ?? "";
         const agentName = l.agent?.name?.toLowerCase() ?? "";
 
         return (
           sid.includes(q) ||
-          contactName.includes(q) ||
           prisonerName.includes(q) ||
           agentName.includes(q)
         );
@@ -205,7 +187,6 @@ export async function getCallLogBySession(
     let log = await CallLog.findOne({ sessionId: req.params.sessionId })
       .populate("agent", "name email role")
       .populate("prisoner", "fullName prisonerId prisonName")
-      .populate("contact", "contactName relation phoneNumber")
       .lean();
 
     // If not found in DB → check sample logs

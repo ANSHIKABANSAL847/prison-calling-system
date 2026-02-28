@@ -1,26 +1,28 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Prisoner from "../models/Prisoner";
-import Contact from "../models/Contact";
 
 // ──────────────────────────────────────
 // GET /api/prisoners/list — List prisoners with pagination + search
-// Query params: page (default 1), limit (default 10), search
 // ──────────────────────────────────────
 export async function getAllPrisoners(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10));
-    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "10"), 10)));
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(String(req.query.limit ?? "10"), 10))
+    );
     const search = String(req.query.search ?? "").trim();
 
-    // Build filter
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, any> = {};
+
     if (search) {
       const rx = new RegExp(search, "i");
       const numericId = Number(search);
+
       filter.$or = [
         { fullName: rx },
         { prisonName: rx },
@@ -30,9 +32,6 @@ export async function getAllPrisoners(
 
     const [prisoners, total] = await Promise.all([
       Prisoner.find(filter)
-        .select(
-          "prisonerId fullName gender prisonName riskTags photo dateOfBirth isActive aadhaarNumber caseNumber sentenceYears",
-        )
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -54,7 +53,7 @@ export async function getAllPrisoners(
 }
 
 // ──────────────────────────────────────
-// POST /api/prisoners/add-prisoner — Add a new prisoner
+// POST /api/prisoners/add-prisoner
 // ──────────────────────────────────────
 export async function createPrisoner(
   req: Request,
@@ -74,24 +73,20 @@ export async function createPrisoner(
       riskTags,
     } = req.body;
 
-    // Check duplicate prisonerId
     const existingById = await Prisoner.findOne({ prisonerId });
     if (existingById) {
-      res
-        .status(409)
-        .json({ message: `Prisoner ID ${prisonerId} already exists` });
+      res.status(409).json({
+        message: `Prisoner ID ${prisonerId} already exists`,
+      });
       return;
     }
 
-    // Check duplicate Aadhaar (if provided)
     if (aadhaarNumber) {
       const existingByAadhaar = await Prisoner.findOne({ aadhaarNumber });
       if (existingByAadhaar) {
-        res
-          .status(409)
-          .json({
-            message: "A prisoner with this Aadhaar number already exists",
-          });
+        res.status(409).json({
+          message: "A prisoner with this Aadhaar number already exists",
+        });
         return;
       }
     }
@@ -114,7 +109,6 @@ export async function createPrisoner(
       prisoner,
     });
   } catch (err: any) {
-    // Handle Mongoose duplicate-key errors
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
       res.status(409).json({ message: `Duplicate value for ${field}` });
@@ -127,7 +121,7 @@ export async function createPrisoner(
 }
 
 // ──────────────────────────────────────
-// GET /api/prisoners/:id — Get single prisoner with contacts
+// GET /api/prisoners/:id
 // ──────────────────────────────────────
 export async function getPrisonerById(
   req: Request,
@@ -143,12 +137,8 @@ export async function getPrisonerById(
       return;
     }
 
-    // Fetch authorized contacts for this prisoner
-    const contacts = await Contact.find({ prisoner: req.params.id })
-      .select("contactName relation phoneNumber photo isVerified")
-      .lean();
-
-    res.json({ prisoner, contacts });
+    //  No more contacts
+    res.json({ prisoner });
   } catch (err) {
     console.error("Get prisoner by ID error:", err);
     res.status(500).json({ message: "Internal server error" });
@@ -156,7 +146,7 @@ export async function getPrisonerById(
 }
 
 // ──────────────────────────────────────
-// PUT /api/prisoners/:id — Update a prisoner
+// PUT /api/prisoners/:id
 // ──────────────────────────────────────
 export async function updatePrisoner(
   req: Request,
@@ -176,7 +166,6 @@ export async function updatePrisoner(
       return;
     }
 
-    // If aadhaarNumber is being changed, check for duplicates
     if (
       req.body.aadhaarNumber &&
       req.body.aadhaarNumber !== prisoner.aadhaarNumber
@@ -185,6 +174,7 @@ export async function updatePrisoner(
         aadhaarNumber: req.body.aadhaarNumber,
         _id: { $ne: id },
       }).lean();
+
       if (existingByAadhaar) {
         res.status(409).json({
           message: "A prisoner with this Aadhaar number already exists",
@@ -198,20 +188,24 @@ export async function updatePrisoner(
       runValidators: true,
     }).lean({ virtuals: true });
 
-    res.json({ message: "Prisoner updated successfully", prisoner: updated });
+    res.json({
+      message: "Prisoner updated successfully",
+      prisoner: updated,
+    });
   } catch (err: any) {
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
       res.status(409).json({ message: `Duplicate value for ${field}` });
       return;
     }
+
     console.error("Update prisoner error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 }
 
 // ──────────────────────────────────────
-// DELETE /api/prisoners/:id — Delete a prisoner and all contacts
+// DELETE /api/prisoners/:id
 // ──────────────────────────────────────
 export async function deletePrisoner(
   req: Request,
@@ -226,17 +220,15 @@ export async function deletePrisoner(
     }
 
     const prisoner = await Prisoner.findByIdAndDelete(id).lean();
+
     if (!prisoner) {
       res.status(404).json({ message: "Prisoner not found" });
       return;
     }
 
-    // Cascade: delete all contacts linked to this prisoner
-    const deleteResult = await Contact.deleteMany({ prisoner: id });
 
     res.json({
-      message: "Prisoner and associated contacts deleted successfully",
-      contactsDeleted: deleteResult.deletedCount,
+      message: "Prisoner deleted successfully",
     });
   } catch (err) {
     console.error("Delete prisoner error:", err);
