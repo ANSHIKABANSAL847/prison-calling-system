@@ -4,6 +4,9 @@ import numpy as np
 import shutil
 import uuid
 import torch
+import torchaudio
+import librosa
+from sklearn.cluster import KMeans
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -28,11 +31,52 @@ os.environ["HF_HOME"] = os.path.abspath("hf_cache")
 class Config:
     MATCH_THRESHOLD = 0.70
     SAMPLE_RATE = 16000
-    MIN_VOICE_SAMPLES = 5
+    MIN_VOICE_SAMPLES = 1
 
 config = Config()
 
 app = FastAPI(title="Advanced Voice Verification Service (Stateless)")
+
+# =========================
+# Monkey Patches
+# =========================
+
+import huggingface_hub
+import os
+
+original_hf_hub_download = huggingface_hub.hf_hub_download
+
+def patched_hf_hub_download(*args, **kwargs):
+    kwargs.pop('use_auth_token', None)
+    repo_id = kwargs.get('repo_id') or (args[0] if len(args) > 0 else "")
+    filename = kwargs.get('filename') or (args[1] if len(args) > 1 else "")
+    
+    # Force SpeechBrain to fallback by throwing HTTPError if it asks for config custom files
+    if filename == "custom.py":
+        import requests
+        class MockRequest: pass
+        class MockResponse:
+            status_code = 404
+            request = MockRequest()
+        err = requests.exceptions.HTTPError("404 Client Error")
+        err.response = MockResponse()
+        raise err
+        
+    try:
+        return original_hf_hub_download(*args, **kwargs)
+    except Exception as e:
+        if "404" in str(e) or "not found" in str(e).lower() or isinstance(e, huggingface_hub.utils.EntryNotFoundError):
+            import requests
+            class MockRequest: pass
+            class MockResponse:
+                status_code = 404
+                request = MockRequest()
+            err = requests.exceptions.HTTPError("404 Client Error")
+            err.response = MockResponse()
+            raise err from e
+        raise
+
+huggingface_hub.hf_hub_download = patched_hf_hub_download
 
 # =========================
 # Load Model
@@ -189,12 +233,6 @@ async def compare(
             if os.path.exists(p):
                 os.remove(p)
 
-# =========================
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
-
 @app.post("/analyze")
 async def analyze(audio: UploadFile = File(...)):
     raw = f"raw_{uuid.uuid4().hex}"
@@ -210,31 +248,65 @@ async def analyze(audio: UploadFile = File(...)):
 
         duration_sec = len(signal) / config.SAMPLE_RATE
 
-        # --- SIMPLE SNR ESTIMATION ---
-        power = np.mean(signal.numpy() ** 2)
-        snr_db = 10 * np.log10(power + 1e-6)
-
-        # --- SIMPLE CLARITY SCORE ---
-        clarity_score = min(max((snr_db / 30) * 100, 0), 100)
-
-        # --- TEMPORARY SPEAKER COUNT (single speaker only for now) ---
-        speaker_count = 1
-        speaker_segments = [{"speaker": "S1", "start": 0, "end": duration_sec}]
+        # --- SIMPLE NOISE & CLARITY ESTIMATION ---
+        signal_np = signal.numpy()
+        rms = np.sqrt(np.mean(signal_np ** 2))
+        dbfs = 20 * np.log10(rms + 1e-5)
+        
+        # Map dBFS (usually -60 to 0) to a clarity percentage
+        # -40 dBFS is poor clarity (0%), -10 dBFS is excellent clarity (100%)
+        clarity_score = min(max((dbfs + 40) / 30 * 100, 0), 100)
+        
+        # Noise percentage (inverse relation for simplicity)
+        noise_score = max(100 - clarity_score, 0)
+        
+        # --- ML SPEAKER COUNT (MFCC Clustering) ---
+        # Get Mel-frequency cepstral coefficients (MFCCs) which represent vocal tract shape
+        mfccs = librosa.feature.mfcc(y=signal_np, sr=config.SAMPLE_RATE, n_mfcc=13)
+        mfccs = mfccs.T  # Shape: (frames, 13)
+        
+        # Filter out silent frames using RMS energy
+        rms_frames = librosa.feature.rms(y=signal_np)[0]
+        threshold = np.mean(rms_frames) * 0.5
+        active_indices = np.where(rms_frames > threshold)[0]
+        
+        # Ensure array size match (librosa hop sizes can sometimes vary slightly)
+        min_len = min(len(active_indices), len(mfccs))
+        active_indices = active_indices[:min_len]
+        mfccs_active = mfccs[active_indices] if len(active_indices) > 0 else mfccs
+        
+        estimated_speakers = 1
+        if len(mfccs_active) > 20:
+            # We standardize the MFCCs to normalize volume
+            mfccs_standardized = (mfccs_active - np.mean(mfccs_active, axis=0)) / (np.std(mfccs_active, axis=0) + 1e-8)
+            
+            # Try splitting into 2 clusters
+            kmeans = KMeans(n_clusters=2, n_init=5, random_state=42)
+            labels = kmeans.fit_predict(mfccs_standardized)
+            
+            # Check the Euclidean distance between the two distinct voice profiles
+            centroids = kmeans.cluster_centers_
+            dist = np.linalg.norm(centroids[0] - centroids[1])
+            
+            # If the smaller cluster has at least 25% of the active talking time AND there's adequate separation
+            bincount = np.bincount(labels)
+            if len(bincount) == 2:
+                ratio = np.min(bincount) / np.sum(bincount)
+                if ratio > 0.25 and dist > 2.5:
+                    estimated_speakers = 2
 
         return {
-            "snr_db": round(float(snr_db), 2),
-            "clarity_score": round(float(clarity_score), 2),
-            "speaker_count": speaker_count,
-            "speaker_segments": speaker_segments,
+            "noise_score": round(float(noise_score), 1),
+            "clarity_score": round(float(clarity_score), 1),
+            "speaker_count": estimated_speakers,
             "duration_sec": round(float(duration_sec), 2)
         }
 
     except Exception as e:
         return {
-            "snr_db": 0,
+            "noise_score": 0,
             "clarity_score": 0,
             "speaker_count": 1,
-            "speaker_segments": [],
             "duration_sec": 0,
             "error": str(e)
         }
@@ -288,3 +360,9 @@ async def diarize_compare(
         for p in [raw_e, wav_e, raw_l, wav_l]:
             if os.path.exists(p):
                 os.remove(p)
+
+# =========================
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -6,11 +6,9 @@ import { Mic, Upload, Square, Trash2, Play, Pause, RotateCcw, Volume2, VolumeX, 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 interface AudioQuality {
-  snrDb: number | null;
-  clarityScore: number | null;
+  noisePercentage: number | null;
+  clearAudioPercentage: number | null;
   speakerCount: number | null;
-  noiseLabel: string;
-  clarityLabel: string;
 }
 
 interface Props {
@@ -296,8 +294,8 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
           return;
         }
 
-const blob = new Blob(chunksRef.current, { type: "audio/wav" });
-const file = new File([blob], "voice.wav", { type: "audio/wav" });
+        const blob = new Blob(chunksRef.current, { type: "audio/wav" });
+        const file = new File([blob], "voice.wav", { type: "audio/wav" });
 
         const url = URL.createObjectURL(blob);
         setAudioURL(url);
@@ -527,43 +525,38 @@ const file = new File([blob], "voice.wav", { type: "audio/wav" });
             </div>
           ) : audioQuality && (
             <div className="space-y-2.5">
-              {/* Noise / SNR */}
+              {/* Noise % */}
               <div className="flex items-center gap-2">
-                {audioQuality.snrDb != null && audioQuality.snrDb >= 10
-                  ? <Volume2 className="w-4 h-4 shrink-0 text-green-500" />
-                  : <VolumeX className="w-4 h-4 shrink-0 text-red-500" />}
-                <span className="text-sm text-gray-700 flex-1">{audioQuality.noiseLabel}</span>
-                {audioQuality.snrDb != null && (
-                  <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
-                    audioQuality.snrDb >= 20 ? "bg-green-100 text-green-700"
-                    : audioQuality.snrDb >= 10 ? "bg-amber-100 text-amber-700"
-                    : "bg-red-100 text-red-700"
-                  }`}>{audioQuality.snrDb.toFixed(1)} dB</span>
+                <VolumeX className="w-4 h-4 shrink-0 text-red-500" />
+                <span className="text-sm text-gray-700 flex-1">Noise</span>
+                {audioQuality.noisePercentage != null && (
+                  <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${audioQuality.noisePercentage <= 20 ? "bg-green-100 text-green-700"
+                    : audioQuality.noisePercentage <= 50 ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700"
+                    }`}>{audioQuality.noisePercentage.toFixed(1)}%</span>
                 )}
               </div>
 
-              {/* Clarity */}
+              {/* Clear Audio % */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 shrink-0 text-purple-500" />
-                  <span className="text-sm text-gray-700 flex-1">{audioQuality.clarityLabel}</span>
-                  {audioQuality.clarityScore != null && (
-                    <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
-                      audioQuality.clarityScore >= 70 ? "bg-green-100 text-green-700"
-                      : audioQuality.clarityScore >= 40 ? "bg-amber-100 text-amber-700"
-                      : "bg-red-100 text-red-700"
-                    }`}>{Math.round(audioQuality.clarityScore)}%</span>
+                  <span className="text-sm text-gray-700 flex-1">Clear Audio</span>
+                  {audioQuality.clearAudioPercentage != null && (
+                    <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${audioQuality.clearAudioPercentage >= 70 ? "bg-green-100 text-green-700"
+                      : audioQuality.clearAudioPercentage >= 40 ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                      }`}>{audioQuality.clearAudioPercentage.toFixed(1)}%</span>
                   )}
                 </div>
-                {audioQuality.clarityScore != null && (
+                {audioQuality.clearAudioPercentage != null && (
                   <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        audioQuality.clarityScore >= 70 ? "bg-green-400"
-                        : audioQuality.clarityScore >= 40 ? "bg-amber-400"
-                        : "bg-red-400"
-                      }`}
-                      style={{ width: `${Math.min(100, audioQuality.clarityScore)}%` }}
+                      className={`h-full rounded-full transition-all ${audioQuality.clearAudioPercentage >= 70 ? "bg-green-400"
+                        : audioQuality.clearAudioPercentage >= 40 ? "bg-amber-400"
+                          : "bg-red-400"
+                        }`}
+                      style={{ width: `${Math.min(100, audioQuality.clearAudioPercentage)}%` }}
                     />
                   </div>
                 )}
@@ -581,6 +574,7 @@ const file = new File([blob], "voice.wav", { type: "audio/wav" });
                   </span>
                 )}
               </div>
+
               {/* Save Sample button — only in manualSave mode */}
               {manualSave && audioFile && (
                 <button

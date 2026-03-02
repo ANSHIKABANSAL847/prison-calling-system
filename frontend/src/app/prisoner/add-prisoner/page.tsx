@@ -57,21 +57,21 @@ function SectionCard({
 export default function AddPrisonerPage() {
   const router = useRouter();
 
-  const [prisonerId,    setPrisonerId]    = useState("");
-  const [fullName,      setFullName]      = useState("");
-  const [dateOfBirth,   setDateOfBirth]   = useState("");
-  const [gender,        setGender]        = useState("");
+  const [prisonerId, setPrisonerId] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [gender, setGender] = useState("");
   const [aadhaarNumber, setAadhaarNumber] = useState("");
-  const [photo,         setPhoto]         = useState("");
-  const [caseNumber,    setCaseNumber]    = useState("");
-  const [prisonName,    setPrisonName]    = useState("");
+  const [photo, setPhoto] = useState("");
+  const [caseNumber, setCaseNumber] = useState("");
+  const [prisonName, setPrisonName] = useState("");
   const [sentenceYears, setSentenceYears] = useState("");
-  const [riskTags,      setRiskTags]      = useState<string[]>([]);
+  const [riskTags, setRiskTags] = useState<string[]>([]);
   const [audioFiles, setAudioFiles] = useState<File[]>([]);
 
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState("");
-  const [createdId,     setCreatedId]     = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [voiceEnrolled, setVoiceEnrolled] = useState(false);
 
   function toggleTag(tag: string) {
@@ -79,83 +79,83 @@ export default function AddPrisonerPage() {
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-  e.preventDefault();
-  setError("");
+    e.preventDefault();
+    setError("");
 
-  if (audioFiles.length < 5) {
-    setError("Minimum 5 voice samples required.");
-    return;
-  }
-
-  const payload = {
-    prisonerId: Number(prisonerId),
-    fullName,
-    dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-    gender,
-    photo,
-    aadhaarNumber: aadhaarNumber || undefined,
-    caseNumber,
-    prisonName,
-    sentenceYears: Number(sentenceYears),
-    riskTags,
-  };
-
-  const validationError = validateField(addPrisonerSchema, payload);
-  if (validationError) {
-    setError(validationError);
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const prisonerRes = await fetch(`${API_URL}/api/prisoners/add-prisoner`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    const prisonerData = await prisonerRes.json();
-    if (!prisonerRes.ok) {
-      setError(prisonerData.message || "Failed to add prisoner");
+    if (audioFiles.length < 1) {
+      setError("Minimum 1 voice sample required.");
       return;
     }
 
-    const newId: string = prisonerData.prisoner._id;
+    const payload = {
+      prisonerId: Number(prisonerId),
+      fullName,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      gender,
+      photo,
+      aadhaarNumber: aadhaarNumber || undefined,
+      caseNumber,
+      prisonName,
+      sentenceYears: Number(sentenceYears),
+      riskTags,
+    };
 
-const fd = new FormData();
-fd.append("prisonerId", newId);   // ✅ ADD THIS
+    const validationError = validateField(addPrisonerSchema, payload);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
-audioFiles.forEach((file) => {
-  fd.append("samples", file);
-});
+    setLoading(true);
 
-const voiceRes = await fetch(
-  `${API_URL}/api/voice/enroll-multiple`,
-  {
-    method: "POST",
-    credentials: "include",
-    body: fd,
+    try {
+      const prisonerRes = await fetch(`${API_URL}/api/prisoners/add-prisoner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      const prisonerData = await prisonerRes.json();
+      if (!prisonerRes.ok) {
+        setError(prisonerData.message || "Failed to add prisoner");
+        return;
+      }
+
+      const newId: string = prisonerData.prisoner._id;
+
+      const fd = new FormData();
+      fd.append("prisonerId", newId);   // ✅ ADD THIS
+
+      audioFiles.forEach((file) => {
+        fd.append("samples", file);
+      });
+
+      const voiceRes = await fetch(
+        `${API_URL}/api/voice/enroll-multiple`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: fd,
+        }
+      );
+
+      const voiceData = await voiceRes.json();
+
+      if (!voiceRes.ok) {
+        console.log("VOICE ERROR:", voiceData);
+        setError(voiceData.message || "Voice enrollment failed");
+        return;
+      }
+
+      setCreatedId(newId);
+      setVoiceEnrolled(true);
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
-);
-
-const voiceData = await voiceRes.json();
-
-if (!voiceRes.ok) {
-  console.log("VOICE ERROR:", voiceData);
-  setError(voiceData.message || "Voice enrollment failed");
-  return;
-}
-
-setCreatedId(newId);
-setVoiceEnrolled(true);
-  } catch {
-    setError("Network error. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-}
 
   // ── Success ───────────────────────────────────────────────────────────────
   if (createdId) {
@@ -192,12 +192,12 @@ setVoiceEnrolled(true);
       </div>
     );
   }
-function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-  if (!e.target.files) return;
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
 
-  const selectedFiles = Array.from(e.target.files);
-  setAudioFiles((prev) => [...prev, ...selectedFiles]);
-}
+    const selectedFiles = Array.from(e.target.files);
+    setAudioFiles((prev) => [...prev, ...selectedFiles]);
+  }
   // ── Form ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col gap-4">
@@ -313,113 +313,112 @@ function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
             </SectionCard>
 
             {/* Voice enrollment */}
-           <SectionCard
-  icon={<Mic className="w-4 h-4" />}
-  title="Voice Enrollment"
->
-  <div className="space-y-4">
+            <SectionCard
+              icon={<Mic className="w-4 h-4" />}
+              title="Voice Enrollment"
+            >
+              <div className="space-y-4">
 
-    {/* Status */}
-    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-xs text-gray-500">
-          Voice Sample Status
-        </span>
-        <span
-          className={`text-xs font-medium ${
-            audioFiles.length >= 5
-              ? "text-green-600"
-              : "text-red-500"
-          }`}
-        >
-          {audioFiles.length >= 5
-            ? "Ready"
-            : `Minimum 5 Required (${audioFiles.length}/5)`}
-        </span>
-      </div>
+                {/* Status */}
+                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-500">
+                      Voice Sample Status
+                    </span>
+                    <span
+                      className={`text-xs font-medium ${audioFiles.length >= 1
+                          ? "text-green-600"
+                          : "text-red-500"
+                        }`}
+                    >
+                      {audioFiles.length >= 1
+                        ? "Ready"
+                        : `Minimum 1 Required (${audioFiles.length}/1)`}
+                    </span>
+                  </div>
 
-      <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-        <div
-          className="h-1.5 bg-blue-500 transition-all duration-500"
-          style={{
-            width: `${Math.min(
-              (audioFiles.length / 5) * 100,
-              100
-            )}%`,
-          }}
-        />
-      </div>
-    </div>
+                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="h-1.5 bg-blue-500 transition-all duration-500"
+                      style={{
+                        width: `${Math.min(
+                          (audioFiles.length / 1) * 100,
+                          100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
 
-    {/* 🎙 Record Audio */}
-    <div>
-      <p className="text-xs text-gray-500 mb-2">
-        Record Voice Sample
-      </p>
-      <VoiceRecorder
-        onAudioReady={(file) => {
-          if (file) {
-            setAudioFiles((prev) => [...prev, file]);
-          }
-        }}
-      />
-    </div>
+                {/* 🎙 Record Audio */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Record Voice Sample
+                  </p>
+                  <VoiceRecorder
+                    onAudioReady={(file) => {
+                      if (file) {
+                        setAudioFiles((prev) => [...prev, file]);
+                      }
+                    }}
+                  />
+                </div>
 
-    {/* 📁 Upload Files */}
-    <div>
-      <p className="text-xs text-gray-500 mb-2">
-        Or Upload Existing Audio Files
-      </p>
+                {/* 📁 Upload Files */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Or Upload Existing Audio Files
+                  </p>
 
-      <input
-        type="file"
-        accept="audio/*"
-        multiple
-        onChange={handleFileSelect}
-        className="w-full text-xs file:mr-4 file:py-2 file:px-4
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="w-full text-xs file:mr-4 file:py-2 file:px-4
                    file:rounded-lg file:border-0
                    file:text-sm file:font-semibold
                    file:bg-blue-50 file:text-blue-700
                    hover:file:bg-blue-100"
-      />
-    </div>
+                  />
+                </div>
 
-    {/* Selected Files List */}
-    {audioFiles.length > 0 && (
-      <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-2">
-        <p className="text-xs font-medium text-gray-600">
-          Selected Samples ({audioFiles.length})
-        </p>
+                {/* Selected Files List */}
+                {audioFiles.length > 0 && (
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-medium text-gray-600">
+                      Selected Samples ({audioFiles.length})
+                    </p>
 
-        <div className="max-h-32 overflow-y-auto space-y-1">
-          {audioFiles.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between text-xs bg-white px-2 py-1 rounded border"
-            >
-              <span className="truncate max-w-[180px]">
-                {file.name || `Recorded Sample ${index + 1}`}
-              </span>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {audioFiles.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-xs bg-white px-2 py-1 rounded border"
+                        >
+                          <span className="truncate max-w-[180px]">
+                            {file.name || `Recorded Sample ${index + 1}`}
+                          </span>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setAudioFiles((prev) =>
-                    prev.filter((_, i) => i !== index)
-                  )
-                }
-                className="text-red-500 hover:text-red-700"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAudioFiles((prev) =>
+                                prev.filter((_, i) => i !== index)
+                              )
+                            }
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-  </div>
-</SectionCard>
+              </div>
+            </SectionCard>
 
             {/* Risk tags */}
             <SectionCard

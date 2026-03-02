@@ -56,7 +56,7 @@ export async function enrollMultipleVoices(req: Request, res: Response) {
     const uploadedUrls: string[] = [];
 
     for (const file of files) {
-      const publicId = `voice_${prisonerId}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      const publicId = `voice_${prisonerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const url = await uploadToCloudinary(file.buffer, publicId);
       uploadedUrls.push(url);
     }
@@ -76,7 +76,7 @@ export async function enrollMultipleVoices(req: Request, res: Response) {
     console.error("ENROLL ERROR:", err);
     res.status(500).json({ message: err.message });
   }
-  
+
 }
 
 // ─────────────────────────────────────────────
@@ -124,15 +124,40 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
     const authorized = bestScore >= THRESHOLD;
     const scorePct = Math.round(bestScore * 100);
 
+    let speakerCount = 1;
+    let unknownSpeakers = 0;
+
+    // Fetch live audio speaker count through ML service heuristic
+    try {
+      const analyzeForm = new FormData();
+      analyzeForm.append("audio", file.buffer, { filename: "live.wav" });
+      const analyzeRes = await axios.post(`${ML_BASE}/analyze`, analyzeForm, {
+        headers: analyzeForm.getHeaders(),
+        timeout: 60000,
+      });
+
+      speakerCount = analyzeRes.data?.speaker_count ?? 1;
+
+      if (authorized) {
+        // If authorized, then at least 1 speaker is known. The rest are unknown.
+        unknownSpeakers = Math.max(0, speakerCount - 1);
+      } else {
+        // If not authorized, all speakers are unknown
+        unknownSpeakers = speakerCount;
+      }
+    } catch (err: any) {
+      console.error("Speaker analyze error:", err.message);
+    }
+
     await CallLog.create({
       sessionId: `CALL-${Date.now()}`,
       prisoner: prisoner._id,
       date: new Date(),
       verificationResult: authorized ? "Verified" : "Failed",
       similarityScore: scorePct,
-      speakerCount: 1,
-      unknownSpeakers: 0,
-      riskLevel: authorized ? "low" : "high",
+      speakerCount,
+      unknownSpeakers,
+      riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
     });
 
     prisoner.verificationPercent = scorePct;
@@ -143,9 +168,9 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
       success: true,
       authorized,
       similarityScore: scorePct,
-      speakerCount: 1,
-      unknownSpeakers: 0,
-      riskLevel: authorized ? "low" : "high",
+      speakerCount,
+      unknownSpeakers,
+      riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
     });
 
   } catch (err: any) {
@@ -165,17 +190,23 @@ export async function analyzeSpeakers(req: Request, res: Response) {
     });
 
     const mlRes = await axios.post(
-      `${ML_BASE}/analyze_speakers`,
+      `${ML_BASE}/analyze`,
       form,
       {
         headers: form.getHeaders(),
       }
     );
-res.json({
-  success: true,
-  speakerCount: mlRes.data.speakers_in_call ?? 1,
-  unknownSpeakers: mlRes.data.unknown_speakers ?? 0,
-});
+
+    const noisePercentage = mlRes.data.noise_score ?? 0;
+    const clearAudioPercentage = mlRes.data.clarity_score ?? 0;
+    const speakerCount = mlRes.data.speaker_count ?? 1;
+
+    res.json({
+      success: true,
+      noisePercentage,
+      clearAudioPercentage,
+      speakerCount,
+    });
   } catch (err: any) {
     console.error("ANALYZE ERROR:", err.message);
     res.status(500).json({ message: err.message });
