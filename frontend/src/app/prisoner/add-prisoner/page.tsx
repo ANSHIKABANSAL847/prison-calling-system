@@ -124,24 +124,32 @@ export default function AddPrisonerPage() {
 
     const newId: string = prisonerData.prisoner._id;
 
-    const fd = new FormData();
-    fd.append("contactId", newId);
+const fd = new FormData();
+fd.append("prisonerId", newId);   // ✅ ADD THIS
 
-    audioFiles.forEach((file) => {
-      fd.append("samples", file);
-    });
+audioFiles.forEach((file) => {
+  fd.append("samples", file);
+});
 
-    const voiceRes = await fetch(
-      `${API_URL}/api/voice/enroll-multiple`,
-      {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      }
-    );
+const voiceRes = await fetch(
+  `${API_URL}/api/voice/enroll-multiple`,
+  {
+    method: "POST",
+    credentials: "include",
+    body: fd,
+  }
+);
 
-    setCreatedId(newId);
-    setVoiceEnrolled(voiceRes.ok);
+const voiceData = await voiceRes.json();
+
+if (!voiceRes.ok) {
+  console.log("VOICE ERROR:", voiceData);
+  setError(voiceData.message || "Voice enrollment failed");
+  return;
+}
+
+setCreatedId(newId);
+setVoiceEnrolled(true);
   } catch {
     setError("Network error. Please try again.");
   } finally {

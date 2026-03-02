@@ -22,11 +22,10 @@ interface SpeakerIdentityPanelProps {
   selected: PrisonerOption | null;
   identityConfirmed: boolean;
   callActive: boolean;
-  verifiedContact: ContactOption | null;
 }
 
 export default function SpeakerIdentityPanel({
-  selected, identityConfirmed, callActive, verifiedContact,
+  selected, identityConfirmed, callActive, 
 }: SpeakerIdentityPanelProps) {
   return (
     <div
@@ -75,9 +74,6 @@ export default function SpeakerIdentityPanel({
             <div className="mt-3 space-y-0.5 text-xs text-gray-600">
               <p><span className="text-gray-400">Gender:</span>{" "}<span className="font-medium">{selected.gender ?? "—"}</span></p>
               <p><span className="text-gray-400">Prison:</span>{" "}<span className="font-medium truncate">{selected.prisonName ?? "—"}</span></p>
-              {verifiedContact && (
-                <p><span className="text-gray-400">Contact:</span>{" "}<span className="font-medium">{verifiedContact.contactName}</span></p>
-              )}
             </div>
           )}
         </div>

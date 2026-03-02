@@ -66,7 +66,12 @@ app.use("/api/voice", voiceRoutes);
 // ── Protect voice recordings behind JWT authentication ──
 // Public static assets (e.g. public images) can be added separately without auth
 app.use("/uploads/voices", authenticate, express.static("uploads/voices"));
-
+// Put this VERY EARLY, right after app = express()
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.path}  |  Content-Type: ${req.headers['content-type'] || 'none'}`);
+  console.log(`[HEADERS] prisonerId in query/body?: ${req.query.prisonerId || req.body?.prisonerId || 'not present'}`);
+  next();
+});
 
 // Health check
 app.get("/api/health", (_req, res) => {

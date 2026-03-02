@@ -1,8 +1,6 @@
-import crypto from "crypto";
 import CallLog from "../models/CallLog";
 import User from "../models/User";
 import Prisoner from "../models/Prisoner";
-import Contact from "../models/Contact";
 
 /**
  * Seeds demo call log records.
@@ -11,17 +9,16 @@ import Contact from "../models/Contact";
 export async function seedCallLogs(): Promise<void> {
   const count = await CallLog.countDocuments();
   if (count > 0) {
-    console.log("ℹ️  Call logs already seeded — skipping");
+    console.log(" Call logs already seeded — skipping");
     return;
   }
 
-  // Pull real agents, prisoners and contacts from DB
+  // Pull real agents and prisoners from DB
   const agents = await User.find().lean();
   const prisoners = await Prisoner.find().lean();
-  const contacts = await Contact.find().populate("prisoner").lean();
 
-  if (!agents.length || !prisoners.length || !contacts.length) {
-    console.warn("⚠️  No agents/prisoners/contacts found — skipping call log seed");
+  if (!agents.length || !prisoners.length) {
+    console.warn("  No agents/prisoners found — skipping call log seed");
     return;
   }
 
@@ -41,30 +38,25 @@ export async function seedCallLogs(): Promise<void> {
     return 70 + Math.floor(Math.random() * 15);                            // 70-84
   }
 
-  // Build 30 demo records spread over the last 60 days
   const now = Date.now();
   const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
+
   const records = [];
 
   for (let i = 0; i < 30; i++) {
     const agent = pick(agents);
-    const contact = pick(contacts);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prisoner =
-      (contact.prisoner as any)?._id
-        ? contact.prisoner
-        : pick(prisoners);
+    const prisoner = pick(prisoners);
+
     const verificationResult = pick(statuses);
     const similarityScore = randomScore(verificationResult);
     const date = new Date(now - Math.random() * SIXTY_DAYS);
-    const durationSeconds = 60 + Math.floor(Math.random() * 1140); // 1-20 min
+    const durationSeconds = 60 + Math.floor(Math.random() * 1140);
     const sessionId = `SID${100000 + i}`;
 
     records.push({
       sessionId,
       agent: agent._id,
-      prisoner: (prisoner as any)._id ?? prisoner,
-      contact: (contact as any)._id,
+      prisoner: prisoner._id,
       date,
       durationSeconds,
       verificationResult,
@@ -73,5 +65,5 @@ export async function seedCallLogs(): Promise<void> {
   }
 
   await CallLog.insertMany(records);
-  console.log(`✅ Seeded ${records.length} call log records`);
+  console.log(`Seeded ${records.length} call log records`);
 }

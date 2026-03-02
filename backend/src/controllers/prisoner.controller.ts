@@ -137,7 +137,7 @@ export async function getPrisonerById(
       return;
     }
 
-    //  No more contacts
+    
     res.json({ prisoner });
   } catch (err) {
     console.error("Get prisoner by ID error:", err);

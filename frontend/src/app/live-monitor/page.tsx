@@ -12,22 +12,6 @@ import CallActionButtons from "./components/CallActionButtons";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-interface ContactOption {
-  _id: string;
-  contactName: string;
-  relation: string;
-  phoneNumber: string;
-  isVerified: boolean;
-}
-
-interface AudioQuality {
-  snrDb: number;
-  clarityScore: number;
-  speakerCount: number;
-  noiseLabel: string;
-  clarityLabel: string;
-}
-
 const CALL_ID = Math.floor(Math.random() * 9_000_000 + 1_000_000).toString();
 
 export default function LiveMonitorPage() {
@@ -36,7 +20,6 @@ export default function LiveMonitorPage() {
 
   const [prisoners, setPrisoners] = useState<PrisonerOption[]>([]);
   const [selected, setSelected] = useState<PrisonerOption | null>(null);
-  const [contacts, setContacts] = useState<ContactOption[]>([]);
 
   const [callActive, setCallActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -44,14 +27,17 @@ export default function LiveMonitorPage() {
 
   const [similarity, setSimilarity] = useState(0);
   const [verified, setVerified] = useState(false);
-  const [identityConfirmed, setIdConf] = useState(false);
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
   const [flagged, setFlagged] = useState(false);
   const [terminated, setTerminated] = useState(false);
   const [alertSent, setAlertSent] = useState(false);
+  const [speakerCount, setSpeakerCount] = useState(1);
+  const [unknownSpeakers, setUnknownSpeakers] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
-  const [audioQuality, setAudioQuality] = useState<AudioQuality | null>(null);
-
+  // ─────────────────────────────────────
+  // Load prisoners
+  // ─────────────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/api/prisoners/list`, { credentials: "include" })
       .then((r) => {
@@ -64,21 +50,10 @@ export default function LiveMonitorPage() {
       .then((d) => d && setPrisoners(d.prisoners || []))
       .catch(() => {});
   }, [router]);
-useEffect(() => {
-  console.log("Selected prisoner:", selected);
-  console.log("Contacts loaded:", contacts);
-}, [contacts]);
-  useEffect(() => {
-    if (!selected) {
-      setContacts([]);
-      return;
-    }
-    fetch(`${API_URL}/api/contacts/${selected._id}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setContacts(d.contacts || []))
-      .catch(() => setContacts([]));
-  }, [selected]);
 
+  // ─────────────────────────────────────
+  // Call timer
+  // ─────────────────────────────────────
   useEffect(() => {
     if (callActive) {
       timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -101,34 +76,39 @@ useEffect(() => {
     setTimeout(() => setToast(null), 3000);
   }
 
-  const verifiedContact =
-    contacts.find((c) => c.isVerified) ?? contacts[0] ?? null;
-
+  // ─────────────────────────────────────
+  // Start call
+  // ─────────────────────────────────────
   function startCall() {
     if (!selected) {
       showToast("Select a prisoner first.");
       return;
     }
+
     setCallActive(true);
     setElapsed(0);
     setSimilarity(0);
     setVerified(false);
-    setIdConf(false);
+    setIdentityConfirmed(false);
     setFlagged(false);
     setTerminated(false);
     setAlertSent(false);
-    setAudioQuality(null);
+    setSpeakerCount(1);
+    setUnknownSpeakers(0);
   }
 
+  // ─────────────────────────────────────
+  // VERIFY VOICE
+  // ─────────────────────────────────────
   async function verifyVoiceFromUI(file: File) {
     try {
-      if (!verifiedContact?._id) {
-        showToast("No verified contact selected");
+      if (!selected?._id) {
+        showToast("No prisoner selected");
         return;
       }
 
       const fd = new FormData();
-      fd.append("contactId", verifiedContact._id);
+      fd.append("prisonerId", selected._id);
       fd.append("file", file);
 
       const res = await fetch(
@@ -147,14 +127,17 @@ useEffect(() => {
         return;
       }
 
+      // Update UI from backend response
       setSimilarity(data.similarityScore || 0);
+      setSpeakerCount(data.speakerCount || 1);
+      setUnknownSpeakers(data.unknownSpeakers || 0);
 
       if (data.authorized) {
         setVerified(true);
-        setIdConf(true);
+        setIdentityConfirmed(true);
       } else {
         setVerified(false);
-        setIdConf(false);
+        setIdentityConfirmed(false);
       }
 
       if (data.riskLevel === "critical") {
@@ -163,10 +146,6 @@ useEffect(() => {
           setAlertSent(true);
           showToast("⚠️ Critical risk detected!");
         }
-      }
-
-      if (data.audioQuality) {
-        setAudioQuality(data.audioQuality);
       }
 
     } catch {
@@ -179,6 +158,7 @@ useEffect(() => {
     verifyVoiceFromUI(file);
   }
 
+  // Re-verify every 10 seconds while call active
   useEffect(() => {
     if (!callActive) return;
 
@@ -216,6 +196,7 @@ useEffect(() => {
         </div>
       )}
 
+      {/* HEADER */}
       <div className="flex items-center justify-between px-5 py-3"
         style={{
           background: "linear-gradient(135deg, #0B1F4B 0%, #162d6b 100%)",
@@ -243,7 +224,7 @@ useEffect(() => {
               setCallActive(false);
               setSimilarity(0);
               setVerified(false);
-              setIdConf(false);
+              setIdentityConfirmed(false);
             }}
           />
           {!callActive && !terminated && (
@@ -257,10 +238,10 @@ useEffect(() => {
         </div>
       </div>
 
-      <VoiceRecorder
-        onAudioReady={(file) => file && handleNewClip(file)}
-      />
+      {/* RECORDER */}
+      <VoiceRecorder onAudioReady={(file) => file && handleNewClip(file)} />
 
+      {/* WAVEFORM */}
       <div className="bg-gray-950 overflow-hidden"
         style={{ borderRadius: 4, border: "1px solid #1e3a7a" }}>
         <div className="relative h-32 px-2 py-2">
@@ -271,14 +252,20 @@ useEffect(() => {
         </div>
       </div>
 
+      {/* PANELS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <SpeakerIdentityPanel
           selected={selected}
           identityConfirmed={identityConfirmed}
           callActive={callActive}
-          verifiedContact={verifiedContact}
         />
-        <SimilarityScorePanel similarity={similarity} audioQuality={audioQuality} />
+
+        <SimilarityScorePanel
+          similarity={similarity}
+          speakerCount={speakerCount}
+          unknownSpeakers={unknownSpeakers}
+        />
+
         <VerificationStatusPanel
           verified={verified}
           identityConfirmed={identityConfirmed}

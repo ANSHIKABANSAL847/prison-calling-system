@@ -62,7 +62,7 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
     try {
       const form = new FormData();
       form.append("audio", file);
-      const res = await fetch(`${API_URL}/api/voice/analyze`, {
+      const res = await fetch(`${API_URL}/api/voice/analyze-speakers`, {
         method: "POST",
         credentials: "include",
         body: form,

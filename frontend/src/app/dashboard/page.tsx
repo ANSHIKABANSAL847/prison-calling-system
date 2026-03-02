@@ -309,14 +309,7 @@ export default function DashboardPage() {
           color="#0B1F4B"
           loading={loadingStats}
         />
-        <StatCard
-          label="Authorised Contacts"
-          value={stats?.contacts.total ?? 0}
-          sub={`${stats?.contacts.verified ?? 0} Verified`}
-          icon={<Contact className="w-16 h-16" />}
-          color="#1a5c2e"
-          loading={loadingStats}
-        />
+    
         <StatCard
           label="Active Calls (30 min)"
           value={stats?.activeCalls ?? 0}

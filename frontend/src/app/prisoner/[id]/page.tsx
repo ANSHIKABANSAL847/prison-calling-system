@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import PrisonerProfile from "../components/PrisonerProfile";
-import AuthorizedContacts from "../components/AuthorizedContacts";
 import CallHistory from "../components/CallHistory";
 import StatsCards from "../components/StatsCards";
 
@@ -199,12 +198,6 @@ export default function PrisonerDetailPage() {
             </div>
           </div>
 
-          {/* CONTACTS */}
-          <AuthorizedContacts
-            prisonerId={prisoner._id}
-            contacts={contacts}
-            onRefresh={fetchPrisoner}
-          />
 
           {/* STATS */}
           <StatsCards prisoner={prisoner} />
