@@ -11,7 +11,10 @@ const THRESHOLD = 0.65;
 // ─────────────────────────────────────────────
 // Upload buffer to Cloudinary
 // ─────────────────────────────────────────────
-async function uploadToCloudinary(buffer: Buffer, publicId: string): Promise<string> {
+async function uploadToCloudinary(
+  buffer: Buffer,
+  publicId: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -22,7 +25,7 @@ async function uploadToCloudinary(buffer: Buffer, publicId: string): Promise<str
       (error, result) => {
         if (error || !result) return reject(error);
         resolve(result.secure_url);
-      }
+      },
     );
     stream.end(buffer);
   });
@@ -44,39 +47,60 @@ async function downloadBuffer(url: string): Promise<Buffer> {
 // ─────────────────────────────────────────────
 export async function enrollMultipleVoices(req: Request, res: Response) {
   try {
-    const prisonerId = req.body.prisonerId;
+    const prisonerId = req.body.prisonerId?.toString().trim();
     const files = req.files as Express.Multer.File[];
 
-    if (!prisonerId) return res.status(400).json({ message: "Missing prisonerId" });
-    if (!files?.length) return res.status(400).json({ message: "No audio files provided" });
+    if (!prisonerId)
+      return res.status(400).json({ message: "Missing prisonerId" });
+    if (!files?.length)
+      return res.status(400).json({ message: "No audio files provided" });
 
-    const prisoner = await Prisoner.findById(prisonerId);
-    if (!prisoner) return res.status(404).json({ message: "Prisoner not found" });
+const prisoner = await Prisoner.findById(prisonerId);
+if (!prisoner)
+  return res.status(404).json({ message: "Prisoner not found" });
 
-    const uploadedUrls: string[] = [];
+const newEmbeddings: number[][] = [];
 
-    for (const file of files) {
-      const publicId = `voice_${prisonerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const url = await uploadToCloudinary(file.buffer, publicId);
-      uploadedUrls.push(url);
-    }
+for (const file of files) {
+  const form = new FormData();
+  form.append("audio", file.buffer, { filename: "sample.wav" });
 
-    prisoner.voicePaths = [...(prisoner.voicePaths || []), ...uploadedUrls];
-    prisoner.voiceSamples = prisoner.voicePaths.length;
-    prisoner.isVoiceEnrolled = true;
+  const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
+    headers: form.getHeaders(),
+  });
 
-    await prisoner.save();
+  console.log("ML response:", mlRes.data);
+
+  if (mlRes.data?.embedding) {
+    newEmbeddings.push(mlRes.data.embedding);
+  }
+}
+
+console.log("Embeddings collected:", newEmbeddings.length);
+
+prisoner.voiceEmbeddings.push(...newEmbeddings);
+prisoner.voiceSamples = newEmbeddings.length;
+prisoner.isVoiceEnrolled = true;
+
+// 🔥 IMPORTANT — BEFORE SAVE
+prisoner.markModified("voiceEmbeddings");
+
+await prisoner.save();
+
+console.log("Saved document:", prisoner);
+
+// VERY IMPORTANT
+prisoner.markModified("voiceEmbeddings");
+
 
     res.json({
       success: true,
-      samplesStored: prisoner.voiceSamples,
+      samplesStored: prisoner.voiceEmbeddings,
     });
-
   } catch (err: any) {
     console.error("ENROLL ERROR:", err);
     res.status(500).json({ message: err.message });
   }
-
 }
 
 // ─────────────────────────────────────────────
@@ -84,43 +108,48 @@ export async function enrollMultipleVoices(req: Request, res: Response) {
 // ─────────────────────────────────────────────
 export async function verifyVoiceAdvanced(req: Request, res: Response) {
   try {
-    const prisonerId = req.body.prisonerId;
+    const prisonerId = req.body.prisonerId?.toString().trim();
     const file = req.file;
 
-    if (!prisonerId) return res.status(400).json({ message: "Missing prisonerId" });
-    if (!file) return res.status(400).json({ message: "No audio file provided" });
+    if (!prisonerId)
+      return res.status(400).json({ message: "Missing prisonerId" });
+    if (!file)
+      return res.status(400).json({ message: "No audio file provided" });
 
     const prisoner = await Prisoner.findById(prisonerId);
-    if (!prisoner) return res.status(404).json({ message: "Prisoner not found" });
+    if (!prisoner)
+      return res.status(404).json({ message: "Prisoner not found" });
 
-    if (!prisoner.voicePaths?.length)
-      return res.status(400).json({ message: "No enrolled samples found" });
+if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length === 0) {
+  console.log("Embeddings missing:", prisoner.voiceEmbeddings);
+  return res.status(400).json({ message: "No enrolled samples found" });
+}
+
+    // Extract live embedding once
+    const form = new FormData();
+    form.append("audio", file.buffer, { filename: "live.wav" });
+
+    const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
+      headers: form.getHeaders(),
+    });
+
+    const liveEmbedding = mlRes.data?.embedding;
+
+    if (!liveEmbedding) {
+      return res.status(500).json({ message: "Embedding extraction failed" });
+    }
 
     let bestScore = 0;
 
-    for (const url of prisoner.voicePaths) {
-      try {
-        const storedBuffer = await downloadBuffer(url);
+    // Compare vectors directly (NO ML CALL INSIDE LOOP)
+    for (const storedEmbedding of prisoner.voiceEmbeddings) {
+      const dot = storedEmbedding.reduce(
+        (sum: number, val: number, i: number) => sum + val * liveEmbedding[i],
+        0,
+      );
 
-        const form = new FormData();
-        form.append("file1", storedBuffer, { filename: "stored.wav" });
-        form.append("file2", file.buffer, { filename: "live.wav" });
-
-        const mlRes = await axios.post(`${ML_BASE}/compare`, form, {
-          headers: form.getHeaders(),
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-          timeout: 120000,
-        });
-
-        const score = mlRes.data?.score ?? 0;
-        if (score > bestScore) bestScore = score;
-
-      } catch (err: any) {
-        console.error("Compare error:", err.message);
-      }
+      if (dot > bestScore) bestScore = dot;
     }
-
     const authorized = bestScore >= THRESHOLD;
     const scorePct = Math.round(bestScore * 100);
 
@@ -172,7 +201,6 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
       unknownSpeakers,
       riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
     });
-
   } catch (err: any) {
     console.error("VERIFY ERROR:", err);
     res.status(500).json({ message: err.message });
@@ -189,13 +217,9 @@ export async function analyzeSpeakers(req: Request, res: Response) {
       filename: "sample.wav",
     });
 
-    const mlRes = await axios.post(
-      `${ML_BASE}/analyze`,
-      form,
-      {
-        headers: form.getHeaders(),
-      }
-    );
+    const mlRes = await axios.post(`${ML_BASE}/analyze`, form, {
+      headers: form.getHeaders(),
+    });
 
     const noisePercentage = mlRes.data.noise_score ?? 0;
     const clearAudioPercentage = mlRes.data.clarity_score ?? 0;

@@ -363,6 +363,42 @@ async def diarize_compare(
 
 # =========================
 
+
+
+@app.post("/extract_embedding")
+async def extract_embedding(audio: UploadFile = File(...)):
+    raw = f"raw_{uuid.uuid4().hex}"
+    wav = f"conv_{uuid.uuid4().hex}.wav"
+
+    try:
+        with open(raw, "wb") as f:
+            shutil.copyfileobj(audio.file, f)
+
+        convert_to_wav(raw, wav)
+
+        signal = model.load_audio(wav).unsqueeze(0)
+
+        # Extract embedding directly
+        embedding = model.encode_batch(signal)
+        embedding = embedding.squeeze().cpu().numpy()
+
+        # Normalize embedding (important)
+        embedding = embedding / (np.linalg.norm(embedding) + 1e-10)
+
+        return {
+            "embedding": embedding.tolist()
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+    finally:
+        for p in [raw, wav]:
+            if os.path.exists(p):
+                os.remove(p)
+
+
+                
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

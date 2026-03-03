@@ -24,7 +24,7 @@ const callLogSchema = new Schema<ICallLog>(
     durationSeconds: { type: Number, default: 0 },
     verificationResult: {
       type: String,
-      enum: ["Verified", "Failed"],
+      enum: ["Verified", "Failed", "Pending"],
       required: true,
     },
     similarityScore: { type: Number, min: 0, max: 100 },

@@ -17,8 +17,8 @@ export interface IPrisoner extends Document {
   voiceSamples: number;
   isVoiceEnrolled: boolean;
   verificationPercent: number;
+  voiceEmbeddings: number[][];
   lastVerificationDate?: Date;
-
   totalCallsMonitored: number;
   isActive: boolean;
 
@@ -39,8 +39,9 @@ const prisonerSchema = new Schema<IPrisoner>(
     sentenceYears: { type: Number, required: true },
     riskTags: { type: [String], default: [] },
 
-    // 🔥 Voice
+    //  Voice
     voicePaths: { type: [String], default: [] },
+    voiceEmbeddings: { type: [[Number]], default: [] }, 
     voiceSamples: { type: Number, default: 0 },
     isVoiceEnrolled: { type: Boolean, default: false },
     verificationPercent: { type: Number, default: 0 },
