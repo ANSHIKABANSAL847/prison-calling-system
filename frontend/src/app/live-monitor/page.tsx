@@ -49,7 +49,7 @@ export default function LiveMonitorPage() {
         return r.json();
       })
       .then((d) => d && setPrisoners(d.prisoners || []))
-      .catch(() => {});
+      .catch(() => { });
   }, [router]);
 
   // ─────────────────────────────────────
@@ -233,20 +233,18 @@ export default function LiveMonitorPage() {
             selected={selected}
             onSelect={(p) => {
               setSelected(p);
-              setCallActive(false);
               setSimilarity(0);
               setVerified(false);
               setIdentityConfirmed(false);
+              setFlagged(false);
+              setTerminated(false);
+              setAlertSent(false);
+              setSpeakerCount(1);
+              setUnknownSpeakers(0);
+              setCallActive(true);
+              setElapsed(0);
             }}
           />
-          {!callActive && !terminated && (
-            <button
-              onClick={startCall}
-              className="px-3 py-1.5 text-xs font-bold uppercase"
-              style={{ background: "#C9A227", color: "#0B1F4B", borderRadius: 3 }}>
-              Start Monitor
-            </button>
-          )}
         </div>
       </div>
 

@@ -35,7 +35,6 @@ interface PrisonerTableRowProps {
   openMoreId: string | null;
   deactivatingId: string | null;
   onOpenMore: (id: string | null) => void;
-  onEdit: (p: Prisoner) => void;
   onDeactivateRequest: (id: string) => void;
   onDeactivateConfirm: (id: string) => void;
   onDeactivateCancel: () => void;
@@ -47,7 +46,6 @@ export default function PrisonerTableRow({
   openMoreId,
   deactivatingId,
   onOpenMore,
-  onEdit,
   onDeactivateRequest,
   onDeactivateConfirm,
   onDeactivateCancel,
@@ -98,7 +96,7 @@ export default function PrisonerTableRow({
             View
           </button>
           <button
-            onClick={() => onEdit(p)}
+            onClick={() => router.push(`/prisoner/add-prisoner?edit=${p._id}`)}
             className="cursor-pointer px-3 py-1 text-xs font-bold uppercase tracking-wide transition"
             style={{ background: "#7A0000", color: "#fff", borderRadius: 2 }}
           >

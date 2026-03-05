@@ -28,7 +28,7 @@ os.environ["HF_HOME"] = os.path.abspath("hf_cache")
 
 @dataclass
 class Config:
-    MATCH_THRESHOLD = 0.70
+    MATCH_THRESHOLD = 0.65
     SAMPLE_RATE = 16000
     MIN_VOICE_SAMPLES = 1
 
