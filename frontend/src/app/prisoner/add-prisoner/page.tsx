@@ -7,7 +7,7 @@ import VoiceRecorder from "../components/VoiceRecorder";
 import {
   ArrowLeft, Loader2, UserPlus,
   Mic, CheckCircle, Users, User,
-  FileText, ShieldAlert, TriangleAlert, Camera,
+  FileText, ShieldAlert, TriangleAlert, Camera, Upload,
 } from "lucide-react";
 import { addPrisonerSchema, validateField } from "@/lib/validators";
 
@@ -313,112 +313,83 @@ export default function AddPrisonerPage() {
             </SectionCard>
 
             {/* Voice enrollment */}
-            <SectionCard
-              icon={<Mic className="w-4 h-4" />}
-              title="Voice Enrollment"
-            >
-              <div className="space-y-4">
+            {/* Voice enrollment */}
+<SectionCard
+  icon={<Mic className="w-4 h-4" />}
+  title="Voice Enrollment (Multiple Samples Allowed)"
+>
+  <div className="space-y-6">
 
-                {/* Status */}
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-gray-500">
-                      Voice Sample Status
-                    </span>
-                    <span
-                      className={`text-xs font-medium ${audioFiles.length >= 1
-                          ? "text-green-600"
-                          : "text-red-500"
-                        }`}
-                    >
-                      {audioFiles.length >= 1
-                        ? "Ready"
-                        : `Minimum 1 Required (${audioFiles.length}/1)`}
-                    </span>
-                  </div>
+    {/* Status bar */}
+    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-xs text-gray-500">Voice Sample Status</span>
+        <span className={`text-xs font-medium ${audioFiles.length >= 1 ? "text-green-600" : "text-red-500"}`}>
+          {audioFiles.length >= 1 ? `${audioFiles.length} ready` : `Minimum 1 Required (${audioFiles.length}/1)`}
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+        <div
+          className="h-1.5 bg-blue-500 transition-all duration-500"
+          style={{ width: `${Math.min((audioFiles.length / 1) * 100, 100)}%` }}
+        />
+      </div>
+    </div>
 
-                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="h-1.5 bg-blue-500 transition-all duration-500"
-                      style={{
-                        width: `${Math.min(
-                          (audioFiles.length / 1) * 100,
-                          100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+    {/* Record new sample */}
+    <div>
+      <p className="text-xs text-gray-500 mb-2">Record a new voice sample</p>
+      <VoiceRecorder
+        onAudioReady={(file) => {
+          if (file) setAudioFiles((prev) => [...prev, file]);
+        }}
+        manualSave={true}
+        autoResetAfterSave={true}
+        hideUploadButton={true}
+      />
+    </div>
 
-                {/* 🎙 Record Audio */}
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Record Voice Sample
-                  </p>
-                  <VoiceRecorder
-                    onAudioReady={(file) => {
-                      if (file) {
-                        setAudioFiles((prev) => [...prev, file]);
-                      }
-                    }}
-                  />
-                </div>
+    {/* ONE upload button for multiple files */}
+    <div>
+      <p className="text-xs text-gray-500 mb-2">Or upload multiple existing audio files</p>
+      <label className="cursor-pointer block w-full border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-2xl p-8 text-center transition hover:bg-blue-50">
+        <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+          <Upload className="w-6 h-6 text-blue-600" />
+        </div>
+        <span className="block text-sm font-medium text-gray-700">Select Audio Files</span>
+        <p className="text-xs text-gray-500 mt-1">MP3, WAV, M4A, WebM • Any number of files</p>
+        <input
+          type="file"
+          accept="audio/*"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      </label>
+    </div>
 
-                {/* 📁 Upload Files */}
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Or Upload Existing Audio Files
-                  </p>
-
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    multiple
-                    onChange={handleFileSelect}
-                    className="w-full text-xs file:mr-4 file:py-2 file:px-4
-                   file:rounded-lg file:border-0
-                   file:text-sm file:font-semibold
-                   file:bg-blue-50 file:text-blue-700
-                   hover:file:bg-blue-100"
-                  />
-                </div>
-
-                {/* Selected Files List */}
-                {audioFiles.length > 0 && (
-                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-2">
-                    <p className="text-xs font-medium text-gray-600">
-                      Selected Samples ({audioFiles.length})
-                    </p>
-
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      {audioFiles.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between text-xs bg-white px-2 py-1 rounded border"
-                        >
-                          <span className="truncate max-w-[180px]">
-                            {file.name || `Recorded Sample ${index + 1}`}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAudioFiles((prev) =>
-                                prev.filter((_, i) => i !== index)
-                              )
-                            }
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </SectionCard>
+    {/* Selected files list (unchanged) */}
+    {audioFiles.length > 0 && (
+      <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-2">
+        <p className="text-xs font-medium text-gray-600">Selected Samples ({audioFiles.length})</p>
+        <div className="max-h-40 overflow-y-auto space-y-1">
+          {audioFiles.map((file, index) => (
+            <div key={index} className="flex items-center justify-between text-xs bg-white px-3 py-2 rounded border">
+              <span className="truncate max-w-[220px]">{file.name || `Recorded Sample ${index + 1}`}</span>
+              <button
+                type="button"
+                onClick={() => setAudioFiles((prev) => prev.filter((_, i) => i !== index))}
+                className="text-red-500 hover:text-red-700"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</SectionCard>
 
             {/* Risk tags */}
             <SectionCard

@@ -6,7 +6,7 @@ import axios from "axios";
 import FormData from "form-data";
 
 const ML_BASE = process.env.ML_SERVICE_URL || "http://127.0.0.1:8001";
-const THRESHOLD = 0.65;
+const THRESHOLD = 0.75;
 
 // ─────────────────────────────────────────────
 // Upload buffer to Cloudinary
@@ -43,7 +43,7 @@ async function downloadBuffer(url: string): Promise<Buffer> {
 }
 
 // ─────────────────────────────────────────────
-// ENROLL (Cloudinary Based)
+// ENROLL
 // ─────────────────────────────────────────────
 export async function enrollMultipleVoices(req: Request, res: Response) {
   try {
@@ -52,51 +52,80 @@ export async function enrollMultipleVoices(req: Request, res: Response) {
 
     if (!prisonerId)
       return res.status(400).json({ message: "Missing prisonerId" });
+
     if (!files?.length)
       return res.status(400).json({ message: "No audio files provided" });
 
-const prisoner = await Prisoner.findById(prisonerId);
-if (!prisoner)
-  return res.status(404).json({ message: "Prisoner not found" });
+    const prisoner = await Prisoner.findById(prisonerId);
+    if (!prisoner)
+      return res.status(404).json({ message: "Prisoner not found" });
 
-const newEmbeddings: number[][] = [];
+    const newEmbeddings: number[][] = [];
 
-for (const file of files) {
-  const form = new FormData();
-  form.append("audio", file.buffer, { filename: "sample.wav" });
+    // Extract embeddings from ML service
+    for (const file of files) {
+      const form = new FormData();
+      form.append("audio", file.buffer, { filename: "sample.wav" });
 
-  const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
-    headers: form.getHeaders(),
-  });
+      const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
+        headers: form.getHeaders(),
+      });
+        console.log("ML RESPONSE:", mlRes.data);
+if (
+  mlRes.data &&
+  Array.isArray(mlRes.data.embedding) &&
+  mlRes.data.embedding.length > 0
+) {
+  newEmbeddings.push(mlRes.data.embedding);
+} else {
+  console.log("Invalid embedding returned:", mlRes.data);
+}
+    }
 
-  console.log("ML response:", mlRes.data);
+    if (newEmbeddings.length === 0) {
+      return res.status(400).json({ message: "No valid embeddings extracted" });
+    }
 
-  if (mlRes.data?.embedding) {
-    newEmbeddings.push(mlRes.data.embedding);
+    // Normalize embeddings
+    const normalized: number[][] = [];
+
+for (let i = 0; i < newEmbeddings.length; i++) {
+  const emb = newEmbeddings[i];
+
+  console.log("Embedding index:", i);
+  console.log("Type:", typeof emb);
+  console.log("IsArray:", Array.isArray(emb));
+
+  if (!Array.isArray(emb)) {
+    throw new Error(`Invalid embedding at index ${i}`);
   }
+
+  normalized.push(normalize(emb));
 }
 
-console.log("Embeddings collected:", newEmbeddings.length);
+    let centroid: number[];
+    let clusterCenters: number[][] = [];
 
-prisoner.voiceEmbeddings.push(...newEmbeddings);
-prisoner.voiceSamples = newEmbeddings.length;
-prisoner.isVoiceEnrolled = true;
+    // If fewer than 2 samples → skip clustering
+    centroid = averageEmbedding(normalized);
+clusterCenters = [];
 
-// 🔥 IMPORTANT — BEFORE SAVE
-prisoner.markModified("voiceEmbeddings");
+    prisoner.voiceEmbeddings = [
+      centroid,
+      ...clusterCenters,
+    ];
 
-await prisoner.save();
+    prisoner.voiceSamples = normalized.length;
+    prisoner.isVoiceEnrolled = true;
 
-console.log("Saved document:", prisoner);
-
-// VERY IMPORTANT
-prisoner.markModified("voiceEmbeddings");
-
+    prisoner.markModified("voiceEmbeddings");
+    await prisoner.save();
 
     res.json({
       success: true,
-      samplesStored: prisoner.voiceEmbeddings,
+      samplesStored: prisoner.voiceEmbeddings.length,
     });
+
   } catch (err: any) {
     console.error("ENROLL ERROR:", err);
     res.status(500).json({ message: err.message });
@@ -104,7 +133,7 @@ prisoner.markModified("voiceEmbeddings");
 }
 
 // ─────────────────────────────────────────────
-// VERIFY (Stateless Compare)
+// VERIFY
 // ─────────────────────────────────────────────
 export async function verifyVoiceAdvanced(req: Request, res: Response) {
   try {
@@ -113,6 +142,7 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
 
     if (!prisonerId)
       return res.status(400).json({ message: "Missing prisonerId" });
+
     if (!file)
       return res.status(400).json({ message: "No audio file provided" });
 
@@ -120,12 +150,10 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
     if (!prisoner)
       return res.status(404).json({ message: "Prisoner not found" });
 
-if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length === 0) {
-  console.log("Embeddings missing:", prisoner.voiceEmbeddings);
-  return res.status(400).json({ message: "No enrolled samples found" });
-}
+    if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length === 0) {
+      return res.status(400).json({ message: "No enrolled samples found" });
+    }
 
-    // Extract live embedding once
     const form = new FormData();
     form.append("audio", file.buffer, { filename: "live.wav" });
 
@@ -139,27 +167,30 @@ if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length 
       return res.status(500).json({ message: "Embedding extraction failed" });
     }
 
+    const liveNorm = normalize(liveEmbedding);
+
     let bestScore = 0;
 
-    // Compare vectors directly (NO ML CALL INSIDE LOOP)
     for (const storedEmbedding of prisoner.voiceEmbeddings) {
       const dot = storedEmbedding.reduce(
-        (sum: number, val: number, i: number) => sum + val * liveEmbedding[i],
-        0,
+        (sum: number, val: number, i: number) =>
+          sum + val * liveNorm[i],
+        0
       );
 
       if (dot > bestScore) bestScore = dot;
     }
+
     const authorized = bestScore >= THRESHOLD;
     const scorePct = Math.round(bestScore * 100);
 
     let speakerCount = 1;
     let unknownSpeakers = 0;
 
-    // Fetch live audio speaker count through ML service heuristic
     try {
       const analyzeForm = new FormData();
       analyzeForm.append("audio", file.buffer, { filename: "live.wav" });
+
       const analyzeRes = await axios.post(`${ML_BASE}/analyze`, analyzeForm, {
         headers: analyzeForm.getHeaders(),
         timeout: 60000,
@@ -168,10 +199,8 @@ if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length 
       speakerCount = analyzeRes.data?.speaker_count ?? 1;
 
       if (authorized) {
-        // If authorized, then at least 1 speaker is known. The rest are unknown.
         unknownSpeakers = Math.max(0, speakerCount - 1);
       } else {
-        // If not authorized, all speakers are unknown
         unknownSpeakers = speakerCount;
       }
     } catch (err: any) {
@@ -201,11 +230,16 @@ if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length 
       unknownSpeakers,
       riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
     });
+
   } catch (err: any) {
     console.error("VERIFY ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 }
+
+// ─────────────────────────────────────────────
+// ANALYZE
+// ─────────────────────────────────────────────
 export async function analyzeSpeakers(req: Request, res: Response) {
   try {
     if (!req.file) {
@@ -213,26 +247,50 @@ export async function analyzeSpeakers(req: Request, res: Response) {
     }
 
     const form = new FormData();
-    form.append("audio", req.file.buffer, {
-      filename: "sample.wav",
-    });
+    form.append("audio", req.file.buffer, { filename: "sample.wav" });
 
     const mlRes = await axios.post(`${ML_BASE}/analyze`, form, {
       headers: form.getHeaders(),
     });
 
-    const noisePercentage = mlRes.data.noise_score ?? 0;
-    const clearAudioPercentage = mlRes.data.clarity_score ?? 0;
-    const speakerCount = mlRes.data.speaker_count ?? 1;
-
     res.json({
       success: true,
-      noisePercentage,
-      clearAudioPercentage,
-      speakerCount,
+      noisePercentage: mlRes.data.noise_score ?? 0,
+      clearAudioPercentage: mlRes.data.clarity_score ?? 0,
+      speakerCount: mlRes.data.speaker_count ?? 1,
     });
+
   } catch (err: any) {
     console.error("ANALYZE ERROR:", err.message);
     res.status(500).json({ message: err.message });
   }
+}
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function normalize(vec?: number[]) {
+  if (!Array.isArray(vec)) {
+    throw new Error("Invalid embedding passed to normalize()");
+  }
+
+  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+  return vec.map(v => v / (norm || 1));
+}
+
+function averageEmbedding(embeddings: number[][]) {
+  const dim = embeddings[0].length;
+  const avg = new Array(dim).fill(0);
+
+  embeddings.forEach(e => {
+    for (let i = 0; i < dim; i++) {
+      avg[i] += e[i];
+    }
+  });
+
+  for (let i = 0; i < dim; i++) {
+    avg[i] /= embeddings.length;
+  }
+
+  return normalize(avg);
 }

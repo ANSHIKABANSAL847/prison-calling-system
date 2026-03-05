@@ -3,9 +3,8 @@ import subprocess
 import numpy as np
 import shutil
 import uuid
-import torch
-import torchaudio
 import librosa
+from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
 from dataclasses import dataclass
 from typing import Annotated
@@ -274,26 +273,33 @@ async def analyze(audio: UploadFile = File(...)):
         min_len = min(len(active_indices), len(mfccs))
         active_indices = active_indices[:min_len]
         mfccs_active = mfccs[active_indices] if len(active_indices) > 0 else mfccs
-        
         estimated_speakers = 1
-        if len(mfccs_active) > 20:
-            # We standardize the MFCCs to normalize volume
-            mfccs_standardized = (mfccs_active - np.mean(mfccs_active, axis=0)) / (np.std(mfccs_active, axis=0) + 1e-8)
-            
-            # Try splitting into 2 clusters
+
+        if len(mfccs_active) > 50:
+            mfccs_standardized = (
+                mfccs_active - np.mean(mfccs_active, axis=0)
+            ) / (np.std(mfccs_active, axis=0) + 1e-8)
+
             kmeans = KMeans(n_clusters=2, n_init=5, random_state=42)
             labels = kmeans.fit_predict(mfccs_standardized)
-            
-            # Check the Euclidean distance between the two distinct voice profiles
-            centroids = kmeans.cluster_centers_
-            dist = np.linalg.norm(centroids[0] - centroids[1])
-            
-            # If the smaller cluster has at least 25% of the active talking time AND there's adequate separation
+
+            sil_score = silhouette_score(mfccs_standardized, labels)
+
             bincount = np.bincount(labels)
-            if len(bincount) == 2:
-                ratio = np.min(bincount) / np.sum(bincount)
-                if ratio > 0.25 and dist > 2.5:
-                    estimated_speakers = 2
+            ratio = np.min(bincount) / np.sum(bincount)
+
+            # MUCH stricter conditions
+            if sil_score > 0.55 and ratio > 0.35:
+                # Check the Euclidean distance between the two distinct voice profiles
+                centroids = kmeans.cluster_centers_
+                dist = np.linalg.norm(centroids[0] - centroids[1])
+                
+                # If the smaller cluster has at least 25% of the active talking time AND there's adequate separation
+                bincount = np.bincount(labels)
+                if len(bincount) == 2:
+                    ratio = np.min(bincount) / np.sum(bincount)
+                    if ratio > 0.25 and dist > 2.5:
+                        estimated_speakers = 2
 
         return {
             "noise_score": round(float(noise_score), 1),

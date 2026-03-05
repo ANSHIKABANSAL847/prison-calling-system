@@ -13,15 +13,17 @@ interface AudioQuality {
 
 interface Props {
   onAudioReady: (file: File | null) => void;
-  /** When true, shows a "Save Sample" button instead of auto-calling onAudioReady.
-   *  Use in flows where onAudioReady unmounts the recorder (add-contact, edit-contact). */
+  /** When true → shows "Save Sample" button instead of auto-saving (used for multiple samples) */
   manualSave?: boolean;
+  /** Hide the "Upload File" button inside the recorder (we use a single multi-upload button in Add Inmate) */
+  hideUploadButton?: boolean;
+  /** After clicking "Save Sample" (when manualSave=true) automatically reset the UI for the next sample */
+  autoResetAfterSave?: boolean;
 }
-
 const MIN_SECONDS = 3;
 const MAX_SECONDS = 10;
 
-export default function VoiceRecorder({ onAudioReady, manualSave = false }: Props) {
+export default function VoiceRecorder({ onAudioReady, manualSave = false, hideUploadButton = false, autoResetAfterSave = false }: Props) {
   const [recording, setRecording] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
@@ -130,6 +132,21 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
       // Web Audio not available – silently skip visualisation
     }
   }
+function clearCurrentAudio(notifyParent = true) {
+    stopPlaybackWaveform();
+    playCtxRef.current?.close();
+    playCtxRef.current = null;
+    playAnalyserRef.current = null;
+    playSourceCreated.current = false;
+
+    setAudioURL(null);
+    setAudioFile(null);
+    setError("");
+    setAudioQuality(null);
+
+    if (notifyParent) onAudioReady(null);
+  }
+
 
   function stopWaveform() {
     if (animFrameRef.current) {
@@ -243,8 +260,7 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
     onAudioReady(null);
   }
 
-  // Clear and immediately start a new recording
-  async function reRecord() {
+async function reRecord() {
     reRecordPendingRef.current = true;
     clearAudio();
     await startRecording();
@@ -335,38 +351,29 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
   // Handle upload
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (audioFile) return;
-
     setError("");
 
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith("audio/")) {
       setError("Please upload a valid audio file.");
       return;
     }
 
     const url = URL.createObjectURL(file);
-    const audio = new Audio(url);
+    setAudioURL(url);
+    setAudioFile(file);
+    analyzeAudio(file);
 
-    audio.onloadedmetadata = () => {
-      if (audio.duration < MIN_SECONDS) {
-        setError(`Audio too short. Must be at least ${MIN_SECONDS} seconds.`);
-        return;
-      }
-      if (audio.duration > MAX_SECONDS) {
-        setError(`Audio too long. Max allowed is ${MAX_SECONDS} seconds.`);
-        return;
-      }
-
-      setAudioURL(url);
-      setAudioFile(file);
-      // Don't call onAudioReady yet — wait for user to confirm after seeing quality
-      analyzeAudio(file);
-      if (!manualSave) onAudioReady(file);
-    };
+    if (!manualSave) onAudioReady(file);
   }
-
+  const handleSaveSample = () => {
+    if (!audioFile) return;
+    onAudioReady(audioFile);
+    if (autoResetAfterSave) {
+      clearCurrentAudio(false);   // reset UI but do NOT call onAudioReady(null)
+    }
+  };
   return (
     <div className="border rounded-xl p-5 bg-gray-50 space-y-4 overflow-hidden w-full">
       <h3 className="text-lg font-semibold text-center">Audio Registration</h3>
@@ -388,7 +395,7 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
       )}
 
       {/* Buttons */}
-      <div className="flex justify-center gap-4 flex-wrap">
+<div className="flex justify-center gap-4 flex-wrap">
         {!recording ? (
           <button
             type="button"
@@ -410,17 +417,19 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
           </button>
         )}
 
-        <label className="flex items-center gap-2 px-5 py-2 border rounded-full bg-white hover:bg-gray-100 cursor-pointer disabled:opacity-50">
-          <Upload className="w-5 h-5" />
-          Upload File
-          <input
-            type="file"
-            accept="audio/*"
-            hidden
-            onChange={handleUpload}
-            disabled={!!audioFile}
-          />
-        </label>
+        {!hideUploadButton && (
+          <label className="flex items-center gap-2 px-5 py-2 border rounded-full bg-white hover:bg-gray-100 cursor-pointer disabled:opacity-50">
+            <Upload className="w-5 h-5" />
+            Upload File
+            <input
+              type="file"
+              accept="audio/*"
+              hidden
+              onChange={handleUpload}
+              disabled={!!audioFile}
+            />
+          </label>
+        )}
 
         {audioFile && (
           <>
@@ -516,11 +525,14 @@ export default function VoiceRecorder({ onAudioReady, manualSave = false }: Prop
                 <span className="w-3 h-3 rounded-full bg-indigo-400 animate-pulse inline-block" />
                 Analysing audio…
               </div>
-              {manualSave && (
-                <button type="button" disabled
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 text-sm font-semibold rounded-xl cursor-not-allowed">
-                  Analysing… please wait
-                </button>
+              {manualSave && audioFile && !analyzing && (
+                <button
+              type="button"
+              onClick={handleSaveSample}
+              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white text-sm font-semibold rounded-xl transition"
+            >
+              Save Sample
+            </button>
               )}
             </div>
           ) : audioQuality && (

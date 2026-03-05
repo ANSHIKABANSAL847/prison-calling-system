@@ -11,12 +11,13 @@ import VerificationStatusPanel from "./components/VerificationStatusPanel";
 import CallActionButtons from "./components/CallActionButtons";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
 const CALL_ID = Math.floor(Math.random() * 9_000_000 + 1_000_000).toString();
 
 export default function LiveMonitorPage() {
   const router = useRouter();
+
   const lastClipRef = useRef<File | null>(null);
+  const lastVerifiedRef = useRef<File | null>(null);
 
   const [prisoners, setPrisoners] = useState<PrisonerOption[]>([]);
   const [selected, setSelected] = useState<PrisonerOption | null>(null);
@@ -127,24 +128,28 @@ export default function LiveMonitorPage() {
         return;
       }
 
-      // Update UI from backend response
-      setSimilarity(data.similarityScore || 0);
+      // Safe similarity handling
+      setSimilarity(
+        typeof data.similarityScore === "number"
+          ? data.similarityScore
+          : 0
+      );
+
       setSpeakerCount(data.speakerCount || 1);
       setUnknownSpeakers(data.unknownSpeakers || 0);
 
-      if (data.authorized) {
-        setVerified(true);
-        setIdentityConfirmed(true);
-      } else {
-        setVerified(false);
-        setIdentityConfirmed(false);
-      }
+      const isAuthorized = data.authorized;
+      const hasUnknown = (data.unknownSpeakers || 0) > 0;
 
-      if (data.riskLevel === "critical") {
+      setVerified(isAuthorized);
+      setIdentityConfirmed(isAuthorized && !hasUnknown);
+
+      // Risk level handling
+      if (data.riskLevel === "high") {
         setFlagged(true);
         if (!alertSent) {
           setAlertSent(true);
-          showToast("⚠️ Critical risk detected!");
+          showToast("⚠️ High risk detected!");
         }
       }
 
@@ -156,15 +161,22 @@ export default function LiveMonitorPage() {
   function handleNewClip(file: File) {
     lastClipRef.current = file;
     verifyVoiceFromUI(file);
+    lastVerifiedRef.current = file;
   }
 
-  // Re-verify every 10 seconds while call active
+  // ─────────────────────────────────────
+  // Re-verify every 10s ONLY if new clip exists
+  // ─────────────────────────────────────
   useEffect(() => {
     if (!callActive) return;
 
     const interval = setInterval(() => {
-      if (lastClipRef.current) {
+      if (
+        lastClipRef.current &&
+        lastClipRef.current !== lastVerifiedRef.current
+      ) {
         verifyVoiceFromUI(lastClipRef.current);
+        lastVerifiedRef.current = lastClipRef.current;
       }
     }, 10000);
 
