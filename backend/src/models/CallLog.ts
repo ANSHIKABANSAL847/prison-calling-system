@@ -11,6 +11,9 @@ export interface ICallLog extends Document {
   speakerCount?: number;
   unknownSpeakers?: number;
   riskLevel?: string;
+  emotion?: string;
+  transcript?: string;
+  threatDetected?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,8 +33,24 @@ const callLogSchema = new Schema<ICallLog>(
     similarityScore: { type: Number, min: 0, max: 100 },
     speakerCount: { type: Number },
     unknownSpeakers: { type: Number },
-    riskLevel: { type: String },
+    emotion: {
+      type: String,
+      default: "neutral"
+    },
+    transcript: {
+      type: String,
+      default: ""
+    },
+    threatDetected: {
+      type: Boolean,
+      default: false
+    },
+    riskLevel: {
+      type: String,
+      default: "low"
+    }
   },
+
   { timestamps: true }
 );
 

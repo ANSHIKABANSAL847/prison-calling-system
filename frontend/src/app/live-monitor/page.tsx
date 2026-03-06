@@ -84,9 +84,8 @@ export default function LiveMonitorPage() {
       if (!res.ok) { showToast(data?.message || "Verification failed"); return; }
 
       setSimilarity(typeof data.similarityScore === "number" ? data.similarityScore : 0);
-      setSpeakerCount(data.speakerCount || 1);
-      setUnknownSpeakers(data.unknownSpeakers || 0);
-
+      setSpeakerCount(data.segmentsChecked || 1);
+      setUnknownSpeakers(data.authorized ? 0 : 1);  
       const isAuthorized = data.authorized;
       const hasUnknown = (data.unknownSpeakers || 0) > 0;
       setVerified(isAuthorized);
@@ -113,7 +112,7 @@ export default function LiveMonitorPage() {
         verifyVoiceFromUI(lastClipRef.current);
         lastVerifiedRef.current = lastClipRef.current;
       }
-    }, 10000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [callActive]);
 

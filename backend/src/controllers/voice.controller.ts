@@ -6,7 +6,8 @@ import axios from "axios";
 import FormData from "form-data";
 
 const ML_BASE = process.env.ML_SERVICE_URL || "http://127.0.0.1:8001";
-const THRESHOLD = 0.75;
+const THRESHOLD = 0.70;
+
 
 // ─────────────────────────────────────────────
 // Upload buffer to Cloudinary
@@ -31,8 +32,9 @@ async function uploadToCloudinary(
   });
 }
 
+
 // ─────────────────────────────────────────────
-// Download Cloudinary file
+// DOWNLOAD CLOUDINARY FILE
 // ─────────────────────────────────────────────
 async function downloadBuffer(url: string): Promise<Buffer> {
   const res = await axios.get(url, {
@@ -42,11 +44,14 @@ async function downloadBuffer(url: string): Promise<Buffer> {
   return Buffer.from(res.data);
 }
 
+
 // ─────────────────────────────────────────────
-// ENROLL
+// ENROLL VOICE
 // ─────────────────────────────────────────────
 export async function enrollMultipleVoices(req: Request, res: Response) {
+
   try {
+
     const prisonerId = req.body.prisonerId?.toString().trim();
     const files = req.files as Express.Multer.File[];
 
@@ -57,86 +62,63 @@ export async function enrollMultipleVoices(req: Request, res: Response) {
       return res.status(400).json({ message: "No audio files provided" });
 
     const prisoner = await Prisoner.findById(prisonerId);
+
     if (!prisoner)
       return res.status(404).json({ message: "Prisoner not found" });
 
-    const newEmbeddings: number[][] = [];
+    const form = new FormData();
 
-    // Extract embeddings from ML service
-    for (const file of files) {
-      const form = new FormData();
-      form.append("audio", file.buffer, { filename: "sample.wav" });
-
-      const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
-        headers: form.getHeaders(),
+    files.forEach((file) => {
+      form.append("samples", file.buffer, {
+        filename: file.originalname || "sample.wav",
       });
-        console.log("ML RESPONSE:", mlRes.data);
-if (
-  mlRes.data &&
-  Array.isArray(mlRes.data.embedding) &&
-  mlRes.data.embedding.length > 0
-) {
-  newEmbeddings.push(mlRes.data.embedding);
-} else {
-  console.log("Invalid embedding returned:", mlRes.data);
-}
+    });
+
+    const mlRes = await axios.post(
+      `${ML_BASE}/extract_speakers`,
+      form,
+      { headers: form.getHeaders() }
+    );
+
+    const embeddings = mlRes.data?.embeddings || [];
+
+    if (!embeddings.length) {
+      return res.status(400).json({
+        message: "No voice embeddings extracted",
+      });
     }
 
-    if (newEmbeddings.length === 0) {
-      return res.status(400).json({ message: "No valid embeddings extracted" });
-    }
-
-    // Normalize embeddings
-    const normalized: number[][] = [];
-
-for (let i = 0; i < newEmbeddings.length; i++) {
-  const emb = newEmbeddings[i];
-
-  console.log("Embedding index:", i);
-  console.log("Type:", typeof emb);
-  console.log("IsArray:", Array.isArray(emb));
-
-  if (!Array.isArray(emb)) {
-    throw new Error(`Invalid embedding at index ${i}`);
-  }
-
-  normalized.push(normalize(emb));
-}
-
-    let centroid: number[];
-    let clusterCenters: number[][] = [];
-
-    // If fewer than 2 samples → skip clustering
-    centroid = averageEmbedding(normalized);
-clusterCenters = [];
-
-    prisoner.voiceEmbeddings = [
-      centroid,
-      ...clusterCenters,
-    ];
-
-    prisoner.voiceSamples = normalized.length;
+    prisoner.voiceEmbeddings = embeddings;
+    prisoner.voiceSamples = embeddings.length;
     prisoner.isVoiceEnrolled = true;
 
-    prisoner.markModified("voiceEmbeddings");
     await prisoner.save();
 
     res.json({
       success: true,
-      samplesStored: prisoner.voiceEmbeddings.length,
+      samplesStored: embeddings.length,
     });
 
   } catch (err: any) {
+
     console.error("ENROLL ERROR:", err);
-    res.status(500).json({ message: err.message });
+
+    res.status(500).json({
+      message: err.message,
+    });
+
   }
+
 }
 
+
 // ─────────────────────────────────────────────
-// VERIFY
+// VERIFY VOICE
 // ─────────────────────────────────────────────
 export async function verifyVoiceAdvanced(req: Request, res: Response) {
+
   try {
+
     const prisonerId = req.body.prisonerId?.toString().trim();
     const file = req.file;
 
@@ -147,150 +129,134 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
       return res.status(400).json({ message: "No audio file provided" });
 
     const prisoner = await Prisoner.findById(prisonerId);
+
     if (!prisoner)
       return res.status(404).json({ message: "Prisoner not found" });
 
-    if (!Array.isArray(prisoner.voiceEmbeddings) || prisoner.voiceEmbeddings.length === 0) {
+    if (!prisoner.voiceEmbeddings?.length)
       return res.status(400).json({ message: "No enrolled samples found" });
-    }
 
     const form = new FormData();
-    form.append("audio", file.buffer, { filename: "live.wav" });
 
-    const mlRes = await axios.post(`${ML_BASE}/extract_embedding`, form, {
-      headers: form.getHeaders(),
-    });
+    form.append("call", file.buffer, { filename: "call.wav" });
 
-    const liveEmbedding = mlRes.data?.embedding;
+    form.append(
+      "authorized_embeddings",
+      JSON.stringify(prisoner.voiceEmbeddings)
+    );
 
-    if (!liveEmbedding) {
-      return res.status(500).json({ message: "Embedding extraction failed" });
-    }
+    const mlRes = await axios.post(
+      `${ML_BASE}/verify_advanced`,
+      form,
+      {
+        headers: form.getHeaders(),
+        timeout: 30000000,
+      }
+    );
 
-    const liveNorm = normalize(liveEmbedding);
+    const segments = mlRes.data?.segments || [];
 
     let bestScore = 0;
+    let threatDetected = false;
+    let transcript = "";
+    let riskLevel = "low";
 
-    for (const storedEmbedding of prisoner.voiceEmbeddings) {
-      const dot = storedEmbedding.reduce(
-        (sum: number, val: number, i: number) =>
-          sum + val * liveNorm[i],
-        0
-      );
+    segments.forEach((s: any) => {
 
-      if (dot > bestScore) bestScore = dot;
-    }
+      if (s.similarity > bestScore)
+        bestScore = s.similarity;
 
+      if (s.threat_detected)
+        threatDetected = true;
+
+      transcript += s.transcript + " ";
+
+      if (s.risk_level === "HIGH")
+        riskLevel = "high";
+
+    });
+
+    const similarityScore = Math.round(bestScore * 100);
     const authorized = bestScore >= THRESHOLD;
-    const scorePct = Math.round(bestScore * 100);
-
-    let speakerCount = 1;
-    let unknownSpeakers = 0;
-
-    try {
-      const analyzeForm = new FormData();
-      analyzeForm.append("audio", file.buffer, { filename: "live.wav" });
-
-      const analyzeRes = await axios.post(`${ML_BASE}/analyze`, analyzeForm, {
-        headers: analyzeForm.getHeaders(),
-        timeout: 60000,
-      });
-
-      speakerCount = analyzeRes.data?.speaker_count ?? 1;
-
-      if (authorized) {
-        unknownSpeakers = Math.max(0, speakerCount - 1);
-      } else {
-        unknownSpeakers = speakerCount;
-      }
-    } catch (err: any) {
-      console.error("Speaker analyze error:", err.message);
-    }
 
     await CallLog.create({
+
       sessionId: `CALL-${Date.now()}`,
       prisoner: prisoner._id,
       date: new Date(),
       verificationResult: authorized ? "Verified" : "Failed",
-      similarityScore: scorePct,
-      speakerCount,
-      unknownSpeakers,
-      riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
+      similarityScore,
+      speakerCount: segments.length,
+      emotion: "neutral",
+      threatDetected,
+      transcript,
+      riskLevel
+
     });
 
-    prisoner.verificationPercent = scorePct;
+    prisoner.verificationPercent = similarityScore;
     prisoner.totalCallsMonitored += 1;
+
     await prisoner.save();
 
     res.json({
+
       success: true,
       authorized,
-      similarityScore: scorePct,
-      speakerCount,
-      unknownSpeakers,
-      riskLevel: authorized && unknownSpeakers === 0 ? "low" : "high",
+      similarityScore,
+      segmentsChecked: segments.length,
+      threatDetected,
+      transcript,
+      riskLevel
+
     });
 
   } catch (err: any) {
+
     console.error("VERIFY ERROR:", err);
-    res.status(500).json({ message: err.message });
+
+    res.status(500).json({
+      message: err.message,
+    });
+
   }
+
 }
 
+
 // ─────────────────────────────────────────────
-// ANALYZE
+// ANALYZE AUDIO ONLY
 // ─────────────────────────────────────────────
 export async function analyzeSpeakers(req: Request, res: Response) {
+
   try {
-    if (!req.file) {
+
+    if (!req.file)
       return res.status(400).json({ message: "No audio file provided" });
-    }
 
     const form = new FormData();
     form.append("audio", req.file.buffer, { filename: "sample.wav" });
 
-    const mlRes = await axios.post(`${ML_BASE}/analyze`, form, {
-      headers: form.getHeaders(),
-    });
+    const mlRes = await axios.post(
+      `${ML_BASE}/detect_threat`,
+      form,
+      { headers: form.getHeaders() }
+    );
 
     res.json({
       success: true,
-      noisePercentage: mlRes.data.noise_score ?? 0,
-      clearAudioPercentage: mlRes.data.clarity_score ?? 0,
-      speakerCount: mlRes.data.speaker_count ?? 1,
+      transcript: mlRes.data.transcript,
+      threatDetected: mlRes.data.threat_detected,
     });
 
   } catch (err: any) {
-    console.error("ANALYZE ERROR:", err.message);
-    res.status(500).json({ message: err.message });
-  }
-}
 
-// ─────────────────────────────────────────────
-// UTILS
-// ─────────────────────────────────────────────
-function normalize(vec?: number[]) {
-  if (!Array.isArray(vec)) {
-    throw new Error("Invalid embedding passed to normalize()");
+    console.error("ANALYZE ERROR:", err);
+
+    res.status(500).json({
+      message: err.message,
+    });
+
   }
 
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-  return vec.map(v => v / (norm || 1));
-}
-
-function averageEmbedding(embeddings: number[][]) {
-  const dim = embeddings[0].length;
-  const avg = new Array(dim).fill(0);
-
-  embeddings.forEach(e => {
-    for (let i = 0; i < dim; i++) {
-      avg[i] += e[i];
-    }
-  });
-
-  for (let i = 0; i < dim; i++) {
-    avg[i] /= embeddings.length;
-  }
-
-  return normalize(avg);
 }

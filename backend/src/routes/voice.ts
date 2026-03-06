@@ -25,7 +25,7 @@ const upload = multer({
 
 // MULTI ENROLL
 router.post(
-  "/enroll-multiple",
+  "/extract_speakers",
   upload.array("samples", 30),
   enrollMultipleVoices
 );

@@ -198,17 +198,17 @@ function AddEditPrisonerInner() {
         fd.append("prisonerId", newId);
         audioFiles.forEach((file) => fd.append("samples", file));
 
-        const voiceRes = await fetch(`${API_URL}/api/voice/enroll-multiple`, {
-          method: "POST",
-          credentials: "include",
-          body: fd,
-        });
-        const voiceData = await voiceRes.json();
-        if (!voiceRes.ok) {
-          console.log("VOICE ERROR:", voiceData);
-          setError(voiceData.message || "Voice enrollment failed");
-          return;
-        }
+const voiceRes = await fetch(`${API_URL}/api/voice/extract_speakers`, {
+  method: "POST",
+  credentials: "include",
+  body: fd,
+});
+
+if (!voiceRes.ok) {
+  const data = await voiceRes.json();
+  setError(data.message || "Voice enrollment failed");
+  return;
+}
         setCreatedId(newId);
         setVoiceEnrolled(true);
       } catch {
@@ -281,12 +281,20 @@ function AddEditPrisonerInner() {
       </div>
     );
   }
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files) return;
+function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  if (!e.target.files) return;
 
-    const selectedFiles = Array.from(e.target.files);
-    setAudioFiles((prev) => [...prev, ...selectedFiles]);
+const selectedFiles = Array.from(e.target.files).filter((file) =>
+    file.type.startsWith("audio/")
+  );
+
+  if (selectedFiles.length === 0) {
+    setError("Please upload valid audio files only.");
+    return;
   }
+
+  setAudioFiles((prev) => [...prev, ...selectedFiles]);
+}
   // ── Form ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col gap-4">
@@ -461,7 +469,7 @@ function AddEditPrisonerInner() {
                       <p className="text-xs text-gray-500 mt-1">MP3, WAV, M4A, WebM • Any number of files</p>
                       <input
                         type="file"
-                        accept="audio/*"
+                        accept=".wav,.mp3,.m4a,.webm"
                         multiple
                         onChange={handleFileSelect}
                         className="hidden"
