@@ -238,15 +238,14 @@ export async function analyzeSpeakers(req: Request, res: Response) {
     form.append("audio", req.file.buffer, { filename: "sample.wav" });
 
     const mlRes = await axios.post(
-      `${ML_BASE}/detect_threat`,
+      `${ML_BASE}/analyze_speakers`,
       form,
       { headers: form.getHeaders() }
     );
 
     res.json({
       success: true,
-      transcript: mlRes.data.transcript,
-      threatDetected: mlRes.data.threat_detected,
+      ...mlRes.data,
     });
 
   } catch (err: any) {
