@@ -13,7 +13,15 @@ import CallActionButtons from "./components/CallActionButtons";
 import VoiceRecorder from "@/app/prisoner/components/VoiceRecorder";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-const CALL_ID = Math.floor(Math.random() * 9_000_000 + 1_000_000).toString();
+const CALL_ID = Math.floor(Math.random() * 9000000 + 1000000).toString();
+
+interface Segment {
+  start: number;
+  end: number;
+  similarity: number;
+  authorized: boolean;
+  speaker_status: string;
+}
 
 export default function LiveMonitorPage() {
   const router = useRouter();
@@ -26,11 +34,13 @@ export default function LiveMonitorPage() {
 
   const [callActive, setCallActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [similarity, setSimilarity] = useState(0);
   const [verified, setVerified] = useState(false);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [transcript, setTranscript] = useState("");
+
   const [flagged, setFlagged] = useState(false);
   const [terminated, setTerminated] = useState(false);
   const [alertSent, setAlertSent] = useState(false);
@@ -38,16 +48,34 @@ export default function LiveMonitorPage() {
   const [unknownSpeakers, setUnknownSpeakers] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
-  // ── Load prisoners ──
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function fmt(s: number) {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  }
+
+  // ─────────────────────────────────
+  // Load prisoners
+  // ─────────────────────────────────
+
   useEffect(() => {
     fetch(`${API_URL}/api/prisoners/list`, { credentials: "include" })
       .then((r) => {
-        if (r.status === 401) { router.replace("/login"); return null; }
+        if (r.status === 401) {
+          router.replace("/login");
+          return null;
+        }
         return r.json();
       })
-      .then((d) => d && setPrisoners(d.prisoners || []))
-      .catch(() => { });
-  }, [router]);
+      .then((d) => d && setPrisoners(d.prisoners || []));
+  }, []);
 
   // ── Call timer ──
   useEffect(() => {
@@ -59,96 +87,166 @@ export default function LiveMonitorPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callActive]);
 
-  function fmt(s: number) {
-    const m = Math.floor(s / 60).toString().padStart(2, "0");
-    const sec = (s % 60).toString().padStart(2, "0");
-    return `${m}:${sec}`;
-  }
+  // ─────────────────────────────────
+  // VERIFY VOICE
+  // ─────────────────────────────────
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }
-
-  // ── Verify voice ──
   async function verifyVoiceFromUI(file: File) {
+
     try {
-      if (!selected?._id) { showToast("No prisoner selected"); return; }
+
+      if (!selected?._id) {
+        showToast("No prisoner selected");
+        return;
+      }
+
       const fd = new FormData();
       fd.append("prisonerId", selected._id);
       fd.append("file", file);
-      const res = await fetch(`${API_URL}/api/voice/verify-advanced`, {
-        method: "POST", body: fd, credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) { showToast(data?.message || "Verification failed"); return; }
 
-      setSimilarity(typeof data.similarityScore === "number" ? data.similarityScore : 0);
-      setSpeakerCount(data.segmentsChecked || 1);
-      setUnknownSpeakers(data.authorized ? 0 : 1);  
-      const isAuthorized = data.authorized;
-      const hasUnknown = (data.unknownSpeakers || 0) > 0;
-      setVerified(isAuthorized);
-      setIdentityConfirmed(isAuthorized && !hasUnknown);
+      const res = await fetch(`${API_URL}/api/voice/verify-advanced`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data?.message || "Verification failed");
+        return;
+      }
+
+      const segs: Segment[] = data.segments || [];
+
+      setSegments(segs);
+
+      setTranscript(data.transcript || "");
+
+      // similarity
+      setSimilarity(data.similarityScore || 0);
+
+      // speakers
+      setSpeakerCount(segs.length);
+
+      const unknown = segs.filter((s) => !s.authorized).length;
+      setUnknownSpeakers(unknown);
+
+      const hasUnknown = unknown > 0;
+
+      setVerified(!hasUnknown);
+      setIdentityConfirmed(!hasUnknown);
 
       if (data.riskLevel === "high") {
         setFlagged(true);
-        if (!alertSent) { setAlertSent(true); showToast("⚠️ High risk detected!"); }
+        showToast("⚠️ High risk detected!");
       }
-    } catch { showToast("Verification error"); }
+
+    } catch (e) {
+
+      showToast("Verification error");
+
+    }
+
   }
+
+  // ─────────────────────────────────
+  // Receive new audio clip
+  // ─────────────────────────────────
 
   function handleNewClip(file: File) {
+
     lastClipRef.current = file;
+
     verifyVoiceFromUI(file);
+
     lastVerifiedRef.current = file;
+
   }
 
-  // ── Re-verify every 10s ──
+  // ─────────────────────────────────
+  // Re-verify every 3s
+  // ─────────────────────────────────
+
   useEffect(() => {
+
     if (!callActive) return;
+
     const interval = setInterval(() => {
-      if (lastClipRef.current && lastClipRef.current !== lastVerifiedRef.current) {
+
+      if (
+        lastClipRef.current &&
+        lastClipRef.current !== lastVerifiedRef.current
+      ) {
         verifyVoiceFromUI(lastClipRef.current);
         lastVerifiedRef.current = lastClipRef.current;
       }
+
     }, 3000);
+
     return () => clearInterval(interval);
+
   }, [callActive]);
 
-  function handleFlag() { setFlagged(true); showToast(`Call ${CALL_ID} flagged.`); }
-  function handleTerminate() { setCallActive(false); setTerminated(true); showToast(`Call ${CALL_ID} terminated.`); }
-  function handleAlert() { setAlertSent(true); showToast("Alert sent to supervisors."); }
+  // ─────────────────────────────────
+  // Call actions
+  // ─────────────────────────────────
+
+  function handleFlag() {
+    setFlagged(true);
+    showToast(`Call ${CALL_ID} flagged`);
+  }
+
+  function handleTerminate() {
+    setCallActive(false);
+    setTerminated(true);
+    showToast(`Call ${CALL_ID} terminated`);
+  }
+
+  function handleAlert() {
+    setAlertSent(true);
+    showToast("Alert sent to supervisors");
+  }
 
   function handleSelectPrisoner(p: PrisonerOption) {
+
     setSelected(p);
+
+    setCallActive(true);
+    setElapsed(0);
+
     setSimilarity(0);
     setVerified(false);
     setIdentityConfirmed(false);
-    setFlagged(false);
-    setTerminated(false);
-    setAlertSent(false);
-    setSpeakerCount(1);
+
+    setSpeakerCount(0);
     setUnknownSpeakers(0);
-    setCallActive(true);
-    setElapsed(0);
+
+    setSegments([]);
+    setTranscript("");
+
+    setFlagged(false);
+    setAlertSent(false);
+    setTerminated(false);
+
   }
 
-  const statusColor = terminated
-    ? "#7A0000"
-    : flagged
+  const statusColor =
+    terminated
+      ? "#7A0000"
+      : flagged
       ? "#b45309"
       : callActive
-        ? "#16a34a"
-        : "#5A6073";
+      ? "#16a34a"
+      : "#5A6073";
 
   const statusLabel = terminated
-    ? "TERMINATED"
-    : flagged
+      ? "TERMINATED"
+      : flagged
       ? "FLAGGED"
       : callActive
-        ? "ACTIVE"
-        : "IDLE";
+      ? "ACTIVE"
+      : "IDLE";
 
   return (
     <div className="p-6 md:p-8" style={{ minHeight: "100vh", background: "#F2F4F7" }}>
@@ -218,15 +316,15 @@ export default function LiveMonitorPage() {
               </span>
             </div>
           </div>
-        </div>
+          </div>
 
         {/* Right: Prisoner select */}
-        <PrisonerDropdown
-          prisoners={prisoners}
-          selected={selected}
-          onSelect={handleSelectPrisoner}
-        />
-      </div>
+          <PrisonerDropdown
+            prisoners={prisoners}
+            selected={selected}
+            onSelect={handleSelectPrisoner}
+          />
+        </div>
 
       {/* ═══════════════════════════════════════════
           VOICE RECORDER (hidden visually, still functional)
@@ -258,11 +356,53 @@ export default function LiveMonitorPage() {
           alertSent={alertSent}
           terminated={terminated}
         />
+
       </div>
 
-      {/* ═══════════════════════════════════════════
-          ACTION BUTTONS
-         ═══════════════════════════════════════════ */}
+      {/* SPEAKER TIMELINE */}
+
+      <div className="bg-white p-5 border rounded mb-6">
+
+        <h3 className="font-bold mb-3">Speaker Timeline</h3>
+
+        {segments.map((s, i) => (
+
+          <div
+            key={i}
+            className="flex justify-between border-b py-2 text-sm"
+          >
+
+            <span>
+              {s.start.toFixed(2)}s — {s.end.toFixed(2)}s
+            </span>
+
+            <span
+              className={
+                s.authorized
+                  ? "text-green-600 font-semibold"
+                  : "text-red-600 font-semibold"
+              }
+            >
+              {s.speaker_status}
+            </span>
+
+          </div>
+
+        ))}
+
+      </div>
+
+      {/* Transcript */}
+
+      {transcript && (
+        <div className="bg-white p-5 border rounded mb-6">
+          <h3 className="font-bold mb-2">Transcript</h3>
+          <p className="text-sm">{transcript}</p>
+        </div>
+      )}
+
+      {/* Buttons */}
+
       <CallActionButtons
         callActive={callActive}
         flagged={flagged}
@@ -272,6 +412,8 @@ export default function LiveMonitorPage() {
         onTerminate={handleTerminate}
         onAlert={handleAlert}
       />
+
     </div>
   );
+
 }

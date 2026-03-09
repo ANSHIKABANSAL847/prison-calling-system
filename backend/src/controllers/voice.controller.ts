@@ -150,7 +150,7 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
       form,
       {
         headers: form.getHeaders(),
-        timeout: 30000000,
+        timeout: 3000000,
       }
     );
 
@@ -200,16 +200,15 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
     await prisoner.save();
 
     res.json({
-
-      success: true,
-      authorized,
-      similarityScore,
-      segmentsChecked: segments.length,
-      threatDetected,
-      transcript,
-      riskLevel
-
-    });
+  success: true,
+  authorized,
+  similarityScore,
+  segmentsChecked: segments.length,
+  threatDetected,
+  transcript,
+  riskLevel,
+  segments
+});
 
   } catch (err: any) {
 
