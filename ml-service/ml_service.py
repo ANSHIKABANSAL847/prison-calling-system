@@ -7,7 +7,8 @@ import subprocess
 import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional, Tuple
-
+from fastapi import WebSocket
+import io
 import numpy as np
 import torch
 import librosa
@@ -18,7 +19,7 @@ from sklearn.cluster import AgglomerativeClustering
 from speechbrain.pretrained import SpeakerRecognition
 from pyannote.audio import Pipeline
 from faster_whisper import WhisperModel
-
+from transformers import pipeline
 # -------------------------
 # Configuration
 # -------------------------
@@ -30,6 +31,8 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 50
     enable_diarization: bool = Field(True, env="ENABLE_DIARIZATION")
     hf_token: Optional[str] = Field(None, env="HF_TOKEN")
+    chunk_duration_sec: int = 2
+    stream_window_sec: int = 10
 
     threat_keywords: List[str] = [
         "escape","attack","gun","weapon","kill","riot","fight",
@@ -73,7 +76,12 @@ async def lifespan(app: FastAPI):
         device=device,
         compute_type="int8_float16" if device == "cuda" else "int8"
     )
+    logger.info("Loading multilingual threat detection model")
 
+    app.state.threat_model = pipeline(
+          "zero-shot-classification",
+           model="joeddav/xlm-roberta-large-xnli"
+   )
     if settings.enable_diarization and settings.hf_token:
 
         logger.info("Loading diarization model")
@@ -107,30 +115,71 @@ def cosine_similarity(a,b):
 
 def convert_audio(input_bytes):
 
-    with tempfile.NamedTemporaryFile(delete=False,suffix=".tmp") as tmp:
-        tmp.write(input_bytes)
-        input_path=tmp.name
+    try:
+        # FAST METHOD (memory loading)
+        audio, sr = librosa.load(
+            io.BytesIO(input_bytes),
+            sr=settings.sample_rate,
+            mono=True
+        )
 
-    output_path=input_path+".wav"
+    except Exception:
+        # FALLBACK METHOD (ffmpeg conversion)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as tmp:
+            tmp.write(input_bytes)
+            input_path = tmp.name
 
-    subprocess.run([
-        "ffmpeg","-y",
-        "-i",input_path,
-        "-ac","1",
-        "-ar","16000",
-        output_path
-    ],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        output_path = input_path + ".wav"
 
-    audio,sr=sf.read(output_path,dtype="float32")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i", input_path,
+                "-ac", "1",
+                "-ar", str(settings.sample_rate),
+                output_path
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
-    os.remove(input_path)
-    os.remove(output_path)
+        audio, sr = sf.read(output_path, dtype="float32")
 
-    audio=librosa.util.normalize(audio)
+        os.remove(input_path)
+        os.remove(output_path)
 
-    return audio,sr
+    audio = librosa.util.normalize(audio)
 
+    return audio, sr
 
+def monitor_continuous(audio, sr, speaker_model, authorized_embeddings):
+
+    window = settings.stream_window_sec * sr
+
+    results = []
+
+    for i in range(0, len(audio), window):
+
+        chunk = audio[i:i+window]
+
+        if len(chunk) < sr:
+            continue
+
+        emb = get_embedding(chunk, sr, speaker_model)
+
+        score = max(cosine_similarity(e, emb) for e in authorized_embeddings)
+
+        authorized = score >= settings.match_threshold
+
+        results.append({
+            "start_sec": round(i/sr,2),
+            "end_sec": round((i+len(chunk))/sr,2),
+            "similarity": round(score,3),
+            "authorized": authorized
+        })
+
+    return results
 def get_embedding(audio,sr,model):
 
     tensor=torch.from_numpy(audio).float().unsqueeze(0)
@@ -144,30 +193,54 @@ def get_embedding(audio,sr,model):
     return emb
 
 
-def transcribe(audio,sr,whisper):
+def transcribe(audio, sr, whisper):
 
-    with tempfile.NamedTemporaryFile(delete=False,suffix=".wav") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
 
-        sf.write(tmp.name,audio,sr)
+        sf.write(tmp.name, audio, sr)
 
-        segments,_=whisper.transcribe(tmp.name)
+        segments,_ = whisper.transcribe(
+    tmp.name,
+    beam_size=5,
+    vad_filter=True
+)
 
-        text=" ".join(s.text for s in segments)
+        texts = []
+
+        for s in segments:
+            if s.text:
+                texts.append(s.text.strip())
+
+        text = " ".join(texts)
 
     os.remove(tmp.name)
 
+    if not text:
+        return ""
+
     return text.lower()
 
+def detect_threat(text, model):
 
-def check_threats(text):
+    if not text:
+        return False, 0.0, "normal conversation"
 
-    threats=[w for w in settings.threat_keywords if w in text]
+    labels = [
+        "escape plan",
+        "violent threat",
+        "criminal planning",
+        "drug smuggling discussion",
+        "normal conversation"
+    ]
 
-    for p in settings.threat_phrases:
-        if p in text:
-            threats.append(p)
+    result = model(text, labels)
 
-    return threats,len(threats)>0
+    label = result["labels"][0]
+    score = result["scores"][0]
+
+    threat = label != "normal conversation" and score > 0.6
+
+    return threat, score, label
 
 
 # ==============================
@@ -321,36 +394,110 @@ async def verify_advanced(
 
         emb = get_embedding(seg_audio, sr, speaker_model)
 
-        score = max(cosine_similarity(e, emb) for e in auth)
+        scores = [cosine_similarity(e, emb) for e in auth]
+
+        score = max(scores)
+
+        avg_score = sum(scores)/len(scores)
+
+        final_score = max(score, avg_score)
 
         if score > best_score:
             best_score = score
 
-        authorized = score >= settings.match_threshold
+        authorized = final_score >= settings.match_threshold
 
         if not authorized:
             unauthorized_detected = True
-
-        transcript = transcribe(audio, sr, whisper)
-
-        threats, detected = check_threats(transcript)
-
+        
         results.append({
-    "start": round(start,2),
-    "end": round(end,2),
-    "similarity": round(score,3),
-    "authorized": authorized,
-    "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED"
-})
+            "start": round(start,2),
+            "end": round(end,2),
+            "similarity": round(score,3),
+            "authorized": authorized,
+            "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED"
+        })
+    continuous_results = monitor_continuous(
+    audio,
+    sr,
+    speaker_model,
+    auth
+     )
+    # ✔ TRANSCRIBE ONLY ONCE
+    transcript = transcribe(audio, sr, whisper)
+
+    # ✔ CHECK THREATS
+    threat_detected, threat_score, threat_label = detect_threat(
+    transcript,
+    app.state.threat_model
+  )
 
     return {
-    "segments_checked": len(results),
-    "segments": results,
-    "unauthorized_detected": unauthorized_detected,
-    "overall_similarity": round(best_score * 100),
-    "transcript": transcript,
-    "threat_detected": detected
-}
+        "segments_checked": len(results),
+        "segments": results,
+        "continuous_monitoring": continuous_results,
+        "unauthorized_detected": unauthorized_detected,
+        "overall_similarity": round(best_score * 100),
+        "transcript": transcript,
+        "threat_detected": threat_detected,
+        "threat_score": threat_score,
+        "threat_type": threat_label
+        
+    }
+@app.websocket("/stream_verify")
+async def stream_verify(websocket: WebSocket):
+
+
+    await websocket.accept()
+
+    speaker_model = app.state.speaker_model
+
+    buffer = b""
+
+    authorized_embeddings = None
+
+    while True:
+
+        data = await websocket.receive_json()
+
+        if "authorized_embeddings" in data:
+            authorized_embeddings = [
+                np.array(e) for e in data["authorized_embeddings"]
+            ]
+            await websocket.send_json({"status": "authorized embeddings received"})
+            continue
+
+        if "audio_chunk" in data:
+
+            chunk_bytes = bytes(data["audio_chunk"])
+
+            buffer += chunk_bytes
+
+            try:
+
+                audio, sr = convert_audio(buffer)
+
+            except:
+                continue
+
+            if len(audio) < sr * settings.chunk_duration_sec:
+                continue
+
+            emb = get_embedding(audio, sr, speaker_model)
+
+            score = max(cosine_similarity(e, emb) for e in authorized_embeddings)
+
+            authorized = score >= settings.match_threshold
+
+            result = {
+                "similarity": round(score, 3),
+                "authorized": authorized,
+                "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED"
+            }
+
+            await websocket.send_json(result)
+
+            buffer = b""
 # ==============================
 # ANALYZE
 # ==============================
@@ -384,13 +531,17 @@ async def analyze_speakers(audio:UploadFile=File(...)):
 
     transcript=transcribe(audio_np,sr,app.state.whisper)
 
-    threats,detected=check_threats(transcript)
+    threat_detected, threat_score, threat_label = detect_threat(
+    transcript,
+    app.state.threat_model
+)
 
     return{
         "transcript":transcript,
         "speakerCount":speaker_count,
-        "threat_keywords":threats,
-        "threat_detected":detected
+        "threat_detected": threat_detected,
+        "threat_score": threat_score,
+        "threat_type": threat_label
     }
 
 

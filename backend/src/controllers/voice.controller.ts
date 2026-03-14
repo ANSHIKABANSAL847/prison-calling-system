@@ -155,26 +155,20 @@ export async function verifyVoiceAdvanced(req: Request, res: Response) {
     );
 
     const segments = mlRes.data?.segments || [];
+    
+let bestScore = 0;
 
-    let bestScore = 0;
-    let threatDetected = false;
-    let transcript = "";
-    let riskLevel = "low";
+segments.forEach((s: any) => {
 
-    segments.forEach((s: any) => {
+  if (s.similarity > bestScore)
+    bestScore = s.similarity;
 
-      if (s.similarity > bestScore)
-        bestScore = s.similarity;
+});
 
-      if (s.threat_detected)
-        threatDetected = true;
+const transcript = mlRes.data?.transcript || "";
+const threatDetected = mlRes.data?.threat_detected || false;
+let riskLevel = "low";
 
-      transcript += s.transcript + " ";
-
-      if (s.risk_level === "HIGH")
-        riskLevel = "high";
-
-    });
 
     const similarityScore = Math.round(bestScore * 100);
     const authorized = bestScore >= THRESHOLD;
