@@ -90,7 +90,26 @@ export default function LiveMonitorPage() {
   // ─────────────────────────────────
   // VERIFY VOICE
   // ─────────────────────────────────
-
+async function sendUnauthorizedAlert(segs: Segment[]) {
+  try {
+    await fetch(`${API_URL}/api/alerts/create`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        callId: CALL_ID,
+        prisonerId: selected?._id,
+        timestamp: new Date(),
+        type: "UNAUTHORIZED_SPEAKER",
+        segments: segs,
+      }),
+    });
+  } catch (err) {
+    console.error("Alert send failed", err);
+  }
+}
   async function verifyVoiceFromUI(file: File) {
 
     try {
@@ -136,10 +155,18 @@ export default function LiveMonitorPage() {
 
       setVerified(!hasUnknown);
       setIdentityConfirmed(!hasUnknown);
+      //  AUTO ALERT
+if (hasUnknown && !alertSent) {
+  setFlagged(true);
+  setAlertSent(true);
+
+  sendUnauthorizedAlert(segs);
+  showToast("Unauthorized speaker detected — Alert sent!");
+}
 
       if (data.riskLevel === "high") {
         setFlagged(true);
-        showToast("⚠️ High risk detected!");
+        showToast(" High risk detected!");
       }
 
     } catch (e) {

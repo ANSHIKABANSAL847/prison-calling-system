@@ -19,7 +19,7 @@ import hpp from "hpp";
 import mongoSanitize from "express-mongo-sanitize";
 import authRoutes from "./routes/auth";
 import prisonerRoutes from "./routes/prisoner";
-
+import alertsRouter from "./routes/alerts";
 import statsRoutes from "./routes/stats";
 import uploadRoutes from "./routes/upload";
 import callLogRoutes from "./routes/callLog";
@@ -29,7 +29,7 @@ import { seedCallLogs } from "./config/seedCallLogs";
 import { globalLimiter } from "./config/rateLimiter";
 import voiceRoutes from "./routes/voice";
 import { authenticate } from "./middleware/auth";
-
+import analyticsRoutes from "./routes/analytics";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -54,7 +54,7 @@ app.use(
 app.use(express.json({ limit: "50kb" }));   // Body limit to prevent large payloads
 app.use(cookieParser());
 app.use(globalLimiter);                     // Global rate limit: 100 req / 15 min
-
+app.use("/api/analytics", analyticsRoutes);
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/prisoners", prisonerRoutes);
@@ -62,7 +62,7 @@ app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/call-logs", callLogRoutes);
 app.use("/api/voice", voiceRoutes);
-
+app.use("/api/alerts", alertsRouter);
 // ── Protect voice recordings behind JWT authentication ──
 // Public static assets (e.g. public images) can be added separately without auth
 app.use("/uploads/voices", authenticate, express.static("uploads/voices"));

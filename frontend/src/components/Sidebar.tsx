@@ -26,9 +26,9 @@ interface SidebarProps {
 const navItems = [
   { key: "dashboard", label: "Dashboard",           icon: Building2,   href: "/dashboard" },
   { key: "prisoners", label: "Prisoner Records",    icon: Users,       href: "/prisoner" },
-  { key: "contacts",  label: "Authorised Contacts", icon: UserCog,     href: "/contacts" },
+  // { key: "contacts",  label: "Authorised Contacts", icon: UserCog,     href: "/contacts" },
   { key: "calls",     label: "Call Monitoring",     icon: Phone,       href: "/live-monitor" },
-  { key: "alerts",    label: "Incidents & Alerts",  icon: AlertTriangle, href: "" },
+  { key: "alerts",    label: "Incidents & Alerts",  icon: AlertTriangle, href: "/alerts" },
   { key: "logs",      label: "Call Logs",           icon: FileText,    href: "/calllogs" },
   { key: "analytics", label: "Reports & Analytics", icon: BarChart4,   href: "/analytics" },
 ];

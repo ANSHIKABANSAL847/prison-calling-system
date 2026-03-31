@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import librosa
 import soundfile as sf
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseSettings, Field
 from sklearn.cluster import AgglomerativeClustering
@@ -51,8 +53,68 @@ settings = Settings()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+executor = ThreadPoolExecutor(max_workers=4)
 
 
+executor = ThreadPoolExecutor(max_workers=6)
+
+async def run_embedding(audio, sr, speaker_model):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        executor,
+        get_embedding,
+        audio,
+        sr,
+        speaker_model
+    )
+
+
+async def run_transcription(audio, sr, whisper):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        executor,
+        transcribe,
+        audio,
+        sr,
+        whisper
+    )
+
+
+async def run_threat_detection(text, model):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        executor,
+        detect_threat,
+        text,
+        model
+    )
+
+
+async def run_monitor(audio, sr, speaker_model, auth):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        executor,
+        monitor_continuous,
+        audio,
+        sr,
+        speaker_model,
+        auth
+    )
+
+
+async def run_diarization(audio, sr, diarization):
+
+    waveform = torch.from_numpy(audio).float().unsqueeze(0)
+
+    loop = asyncio.get_running_loop()
+
+    return await loop.run_in_executor(
+        executor,
+        lambda: diarization({
+            "waveform": waveform,
+            "sample_rate": sr
+        })
+    )
 # ==============================
 # Model Loading
 # ==============================
@@ -356,60 +418,71 @@ async def verify_advanced(
 
     speaker_model = app.state.speaker_model
     whisper = app.state.whisper
+    threat_model = app.state.threat_model
+    diarization = app.state.diarization
 
     auth = [np.array(e) for e in json.loads(authorized_embeddings)]
 
     audio_bytes = await call.read()
-
     audio, sr = convert_audio(audio_bytes)
+
+    # -------- PARALLEL TASKS START --------
+
+    diarization_task = asyncio.create_task(
+        run_diarization(audio, sr, diarization)
+    )
+
+    transcription_task = asyncio.create_task(
+        run_transcription(audio, sr, whisper)
+    )
+
+    monitor_task = asyncio.create_task(
+        run_monitor(audio, sr, speaker_model, auth)
+    )
+
+    diarization_result = await diarization_task
 
     segments = []
 
-    diarization = app.state.diarization
-
-    waveform = torch.from_numpy(audio).float().unsqueeze(0)
-
-    diarization_result = diarization({
-       "waveform": waveform,
-        "sample_rate": sr
-     })
-
     for turn, _, speaker in diarization_result.itertracks(yield_label=True):
 
-      if turn.duration < settings.min_segment_duration:
-        continue
+        if turn.duration < settings.min_segment_duration:
+            continue
 
-      start = int(turn.start * sr)
-      end = int(turn.end * sr)
+        start = int(turn.start * sr)
+        end = int(turn.end * sr)
 
-      seg_audio = audio[start:end]
+        seg_audio = audio[start:end]
 
-      segments.append((turn.start, turn.end, seg_audio))
+        segments.append((turn.start, turn.end, seg_audio))
+
+    # -------- PARALLEL EMBEDDINGS --------
+
+    embedding_tasks = [
+        run_embedding(seg_audio, sr, speaker_model)
+        for _, _, seg_audio in segments
+    ]
+
+    embeddings = await asyncio.gather(*embedding_tasks)
 
     results = []
     unauthorized_detected = False
     best_score = 0
 
-    for start, end, seg_audio in segments:
-
-        emb = get_embedding(seg_audio, sr, speaker_model)
+    for (start, end, _), emb in zip(segments, embeddings):
 
         scores = [cosine_similarity(e, emb) for e in auth]
 
         score = max(scores)
 
-        avg_score = sum(scores)/len(scores)
-
-        final_score = max(score, avg_score)
-
         if score > best_score:
             best_score = score
 
-        authorized = final_score >= settings.match_threshold
+        authorized = score >= settings.match_threshold
 
         if not authorized:
             unauthorized_detected = True
-        
+
         results.append({
             "start": round(start,2),
             "end": round(end,2),
@@ -417,20 +490,15 @@ async def verify_advanced(
             "authorized": authorized,
             "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED"
         })
-    continuous_results = monitor_continuous(
-    audio,
-    sr,
-    speaker_model,
-    auth
-     )
-    # ✔ TRANSCRIBE ONLY ONCE
-    transcript = transcribe(audio, sr, whisper)
 
-    # ✔ CHECK THREATS
-    threat_detected, threat_score, threat_label = detect_threat(
-    transcript,
-    app.state.threat_model
-  )
+    transcript = await transcription_task
+
+    threat_detected, threat_score, threat_label = await run_threat_detection(
+        transcript,
+        threat_model
+    )
+
+    continuous_results = await monitor_task
 
     return {
         "segments_checked": len(results),
@@ -442,57 +510,84 @@ async def verify_advanced(
         "threat_detected": threat_detected,
         "threat_score": threat_score,
         "threat_type": threat_label
-        
     }
 @app.websocket("/stream_verify")
 async def stream_verify(websocket: WebSocket):
 
-
     await websocket.accept()
 
     speaker_model = app.state.speaker_model
-
-    buffer = b""
+    whisper = app.state.whisper
+    threat_model = app.state.threat_model
 
     authorized_embeddings = None
+    buffer = b""
 
     while True:
 
         data = await websocket.receive_json()
 
+        # receive authorized embeddings
         if "authorized_embeddings" in data:
+
             authorized_embeddings = [
                 np.array(e) for e in data["authorized_embeddings"]
             ]
-            await websocket.send_json({"status": "authorized embeddings received"})
+
+            await websocket.send_json({"status": "authorized speakers loaded"})
             continue
 
         if "audio_chunk" in data:
 
             chunk_bytes = bytes(data["audio_chunk"])
-
             buffer += chunk_bytes
 
             try:
-
                 audio, sr = convert_audio(buffer)
-
             except:
                 continue
 
             if len(audio) < sr * settings.chunk_duration_sec:
                 continue
 
-            emb = get_embedding(audio, sr, speaker_model)
+            # -------------------------
+            # PARALLEL TASKS
+            # -------------------------
 
-            score = max(cosine_similarity(e, emb) for e in authorized_embeddings)
+            embedding_task = asyncio.create_task(
+                run_embedding(audio, sr, speaker_model)
+            )
 
-            authorized = score >= settings.match_threshold
+            transcription_task = asyncio.create_task(
+                run_transcription(audio, sr, whisper)
+            )
+
+            emb = await embedding_task
+
+            scores = [
+                cosine_similarity(e, emb)
+                for e in authorized_embeddings
+            ]
+
+            similarity = max(scores)
+
+            authorized = similarity >= settings.match_threshold
+
+            transcript = await transcription_task
+
+            threat_detected, threat_score, threat_type = await run_threat_detection(
+                transcript,
+                threat_model
+            )
 
             result = {
-                "similarity": round(score, 3),
+                "similarity": round(similarity,3),
                 "authorized": authorized,
-                "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED"
+                "speaker_status": "AUTHORIZED" if authorized else "UNAUTHORIZED",
+                "transcript": transcript,
+                "threat_detected": threat_detected,
+                "threat_score": threat_score,
+                "threat_type": threat_type
             }
 
             await websocket.send_json(result)
@@ -503,42 +598,43 @@ async def stream_verify(websocket: WebSocket):
 # ==============================
 
 @app.post("/analyze_speakers")
-async def analyze_speakers(audio:UploadFile=File(...)):
+async def analyze_speakers(audio: UploadFile = File(...)):
 
-    content=await audio.read()
+    content = await audio.read()
 
-    audio_np,sr=convert_audio(content)
+    audio_np, sr = convert_audio(content)
 
-    diarization=app.state.diarization
+    diarization = app.state.diarization
+    whisper = app.state.whisper
+    threat_model = app.state.threat_model
 
-    speaker_count=None
+    diarization_task = asyncio.create_task(
+        run_diarization(audio_np, sr, diarization)
+    )
 
-    if diarization:
+    transcription_task = asyncio.create_task(
+        run_transcription(audio_np, sr, whisper)
+    )
 
-        waveform=torch.from_numpy(audio_np).float().unsqueeze(0)
+    diarization_result = await diarization_task
 
-        diarization_result=diarization({
-            "waveform":waveform,
-            "sample_rate":sr
-        })
+    speakers = set()
 
-        speakers=set()
+    for turn, _, speaker in diarization_result.itertracks(yield_label=True):
+        speakers.add(speaker)
 
-        for turn,_,speaker in diarization_result.itertracks(yield_label=True):
-            speakers.add(speaker)
+    speaker_count = len(speakers)
 
-        speaker_count=len(speakers)
+    transcript = await transcription_task
 
-    transcript=transcribe(audio_np,sr,app.state.whisper)
+    threat_detected, threat_score, threat_label = await run_threat_detection(
+        transcript,
+        threat_model
+    )
 
-    threat_detected, threat_score, threat_label = detect_threat(
-    transcript,
-    app.state.threat_model
-)
-
-    return{
-        "transcript":transcript,
-        "speakerCount":speaker_count,
+    return {
+        "transcript": transcript,
+        "speakerCount": speaker_count,
         "threat_detected": threat_detected,
         "threat_score": threat_score,
         "threat_type": threat_label
